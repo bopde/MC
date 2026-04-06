@@ -1,0 +1,364 @@
+<script>
+/**
+ * Settings module.
+ * Manage reference data: Businesses, Work Codes, Accounts, Budget Rules.
+ */
+
+function renderSettingsPage(container) {
+  container.innerHTML =
+    '<div class="tab-bar">' +
+      '<button class="active" onclick="showSettingsTab(\'businesses\')">Businesses</button>' +
+      '<button onclick="showSettingsTab(\'codes\')">Work Codes</button>' +
+      '<button onclick="showSettingsTab(\'accounts\')">Accounts</button>' +
+      '<button onclick="showSettingsTab(\'rules\')">Budget Rules</button>' +
+    '</div>' +
+    '<div id="settings-tab-content"></div>';
+
+  showSettingsTab('businesses');
+}
+
+function showSettingsTab(tab) {
+  document.querySelectorAll('.tab-bar button').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  // Find the right button
+  var labels = { businesses: 0, codes: 1, accounts: 2, rules: 3 };
+  document.querySelectorAll('.tab-bar button')[labels[tab]].classList.add('active');
+
+  var renderers = {
+    businesses: renderBusinessSettings,
+    codes: renderCodeSettings,
+    accounts: renderAccountSettings,
+    rules: renderRuleSettings
+  };
+  renderers[tab]();
+}
+
+// --- Businesses ---
+
+function renderBusinessSettings() {
+  var content = document.getElementById('settings-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  serverCall('getAllBusinesses').then(function(businesses) {
+    var html =
+      '<details><summary><strong>Add New Business</strong></summary>' +
+      '<form id="add-biz-form" onsubmit="submitBusiness(event)">' +
+        '<div class="form-row">' +
+          '<label>Name <input type="text" id="biz-name" required></label>' +
+          '<label>Contact Name <input type="text" id="biz-contact"></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Email <input type="email" id="biz-email"></label>' +
+          '<label>Default Rate ($/hr) <input type="number" id="biz-rate" step="0.01"></label>' +
+          '<label>Currency <input type="text" id="biz-currency" value="NZD"></label>' +
+        '</div>' +
+        '<label>Address <textarea id="biz-address" rows="2"></textarea></label>' +
+        '<div class="form-actions"><button type="submit">Add Business</button></div>' +
+      '</form></details>';
+
+    if (businesses.length > 0) {
+      html += '<table><thead><tr>' +
+        '<th>ID</th><th>Name</th><th>Contact</th><th>Email</th>' +
+        '<th class="number">Rate</th><th>Currency</th><th>Active</th>' +
+        '</tr></thead><tbody>';
+
+      businesses.forEach(function(b) {
+        var isActive = b.active === true || b.active === 'TRUE' || b.active === 'true';
+        html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
+          '<td>' + escapeHtml(b.business_id) + '</td>' +
+          '<td>' + escapeHtml(b.name) + '</td>' +
+          '<td>' + escapeHtml(b.contact_name) + '</td>' +
+          '<td>' + escapeHtml(b.email) + '</td>' +
+          '<td class="number">' + formatCurrency(b.default_rate) + '</td>' +
+          '<td>' + escapeHtml(b.currency) + '</td>' +
+          '<td>' +
+            (isActive
+              ? '<button class="outline secondary" onclick="toggleBusiness(' + b._rowIndex + ', false)">Deactivate</button>'
+              : '<button class="outline" onclick="toggleBusiness(' + b._rowIndex + ', true)">Activate</button>') +
+          '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<p>No businesses configured. Add one above.</p>';
+    }
+
+    content.innerHTML = html;
+  });
+}
+
+function submitBusiness(event) {
+  event.preventDefault();
+  var data = {
+    name: document.getElementById('biz-name').value,
+    contact_name: document.getElementById('biz-contact').value,
+    email: document.getElementById('biz-email').value,
+    default_rate: Number(document.getElementById('biz-rate').value) || 0,
+    currency: document.getElementById('biz-currency').value || 'NZD',
+    address: document.getElementById('biz-address').value
+  };
+
+  serverCall('addBusiness', data).then(function() {
+    showToast('Business added!');
+    AppCache.businesses = null;
+    renderBusinessSettings();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+
+function toggleBusiness(rowIndex, active) {
+  serverCall('toggleEntityFromClient', 'Businesses|' + rowIndex + '|' + active).then(function() {
+    showToast(active ? 'Business activated!' : 'Business deactivated!');
+    AppCache.businesses = null;
+    renderBusinessSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+// --- Work Codes ---
+
+function renderCodeSettings() {
+  var content = document.getElementById('settings-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  serverCall('getAll', 'WorkCodes').then(function(codes) {
+    var html =
+      '<details><summary><strong>Add New Work Code</strong></summary>' +
+      '<form id="add-code-form" onsubmit="submitWorkCode(event)">' +
+        '<div class="form-row">' +
+          '<label>Code ID <input type="text" id="wc-id" required placeholder="e.g. DEV, DESIGN"></label>' +
+          '<label>Description <input type="text" id="wc-desc" required></label>' +
+          '<label>Category <select id="wc-cat"><option value="billable">Billable</option><option value="non-billable">Non-billable</option></select></label>' +
+        '</div>' +
+        '<div class="form-actions"><button type="submit">Add Code</button></div>' +
+      '</form></details>';
+
+    if (codes.length > 0) {
+      html += '<table><thead><tr><th>Code ID</th><th>Description</th><th>Category</th><th>Active</th></tr></thead><tbody>';
+      codes.forEach(function(c) {
+        var isActive = c.active === true || c.active === 'TRUE' || c.active === 'true';
+        html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
+          '<td><strong>' + escapeHtml(c.code_id) + '</strong></td>' +
+          '<td>' + escapeHtml(c.description) + '</td>' +
+          '<td>' + escapeHtml(c.category) + '</td>' +
+          '<td>' +
+            (isActive
+              ? '<button class="outline secondary" onclick="toggleCode(' + c._rowIndex + ', false)">Deactivate</button>'
+              : '<button class="outline" onclick="toggleCode(' + c._rowIndex + ', true)">Activate</button>') +
+          '</td></tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<p>No work codes configured.</p>';
+    }
+
+    content.innerHTML = html;
+  });
+}
+
+function submitWorkCode(event) {
+  event.preventDefault();
+  var data = {
+    code_id: document.getElementById('wc-id').value.toUpperCase(),
+    description: document.getElementById('wc-desc').value,
+    category: document.getElementById('wc-cat').value
+  };
+
+  serverCall('addWorkCode', data).then(function() {
+    showToast('Work code added!');
+    AppCache.workCodes = null;
+    renderCodeSettings();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+
+function toggleCode(rowIndex, active) {
+  serverCall('toggleEntityFromClient', 'WorkCodes|' + rowIndex + '|' + active).then(function() {
+    showToast(active ? 'Code activated!' : 'Code deactivated!');
+    AppCache.workCodes = null;
+    renderCodeSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+// --- Accounts ---
+
+function renderAccountSettings() {
+  var content = document.getElementById('settings-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  serverCall('getAll', 'Accounts').then(function(accounts) {
+    var html =
+      '<details><summary><strong>Add New Account</strong></summary>' +
+      '<form id="add-acc-form" onsubmit="submitAccount(event)">' +
+        '<div class="form-row">' +
+          '<label>Name <input type="text" id="acc-name" required placeholder="e.g. ASB Chequing, Tax Hold"></label>' +
+          '<label>Type <select id="acc-type">' +
+            '<option value="bank">Bank</option>' +
+            '<option value="investment">Investment</option>' +
+            '<option value="hold">Hold/Reserve</option>' +
+            '<option value="crypto">Crypto</option>' +
+            '<option value="other">Other</option>' +
+          '</select></label>' +
+          '<label>Purpose <input type="text" id="acc-purpose" placeholder="e.g. savings, tax, spending"></label>' +
+        '</div>' +
+        '<div class="form-actions"><button type="submit">Add Account</button></div>' +
+      '</form></details>';
+
+    if (accounts.length > 0) {
+      html += '<table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Purpose</th><th>Active</th></tr></thead><tbody>';
+      accounts.forEach(function(a) {
+        var isActive = a.active === true || a.active === 'TRUE' || a.active === 'true';
+        html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
+          '<td>' + escapeHtml(a.account_id) + '</td>' +
+          '<td>' + escapeHtml(a.name) + '</td>' +
+          '<td>' + escapeHtml(a.type) + '</td>' +
+          '<td>' + escapeHtml(a.purpose) + '</td>' +
+          '<td>' +
+            (isActive
+              ? '<button class="outline secondary" onclick="toggleAccount(' + a._rowIndex + ', false)">Deactivate</button>'
+              : '<button class="outline" onclick="toggleAccount(' + a._rowIndex + ', true)">Activate</button>') +
+          '</td></tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<p>No accounts configured.</p>';
+    }
+
+    content.innerHTML = html;
+  });
+}
+
+function submitAccount(event) {
+  event.preventDefault();
+  var data = {
+    name: document.getElementById('acc-name').value,
+    type: document.getElementById('acc-type').value,
+    purpose: document.getElementById('acc-purpose').value
+  };
+
+  serverCall('addAccount', data).then(function() {
+    showToast('Account added!');
+    AppCache.accounts = null;
+    renderAccountSettings();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+
+function toggleAccount(rowIndex, active) {
+  serverCall('toggleEntityFromClient', 'Accounts|' + rowIndex + '|' + active).then(function() {
+    showToast(active ? 'Account activated!' : 'Account deactivated!');
+    AppCache.accounts = null;
+    renderAccountSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+// --- Budget Rules ---
+
+function renderRuleSettings() {
+  var content = document.getElementById('settings-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  serverCall('getBudgetRules').then(function(rules) {
+    var html =
+      '<details><summary><strong>Add New Budget Rule</strong></summary>' +
+      '<form id="add-rule-form" onsubmit="submitBudgetRule(event)">' +
+        '<div class="form-row">' +
+          '<label>Rule Name <input type="text" id="br-name" required placeholder="e.g. Default Split"></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Tax % <input type="number" id="br-tax" step="0.01" value="0.28" required></label>' +
+          '<label>GST % <input type="number" id="br-gst" step="0.01" value="0.15" required></label>' +
+          '<label>Donations % <input type="number" id="br-donations" step="0.01" value="0.05" required></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Savings % <input type="number" id="br-savings" step="0.01" value="0.10" required></label>' +
+          '<label>Investments % <input type="number" id="br-investments" step="0.01" value="0.10" required></label>' +
+          '<label>Spending % <input type="number" id="br-spending" step="0.01" value="0.32" required></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label><input type="checkbox" id="br-default"> Set as default rule</label>' +
+          '<label>Notes <input type="text" id="br-notes"></label>' +
+        '</div>' +
+        '<p id="br-sum-display" style="font-weight:600;"></p>' +
+        '<div class="form-actions"><button type="submit">Add Rule</button></div>' +
+      '</form></details>';
+
+    if (rules.length > 0) {
+      html += '<table><thead><tr>' +
+        '<th>Name</th><th class="number">Tax</th><th class="number">GST</th>' +
+        '<th class="number">Donations</th><th class="number">Savings</th>' +
+        '<th class="number">Investments</th><th class="number">Spending</th>' +
+        '<th>Default</th><th>Notes</th>' +
+        '</tr></thead><tbody>';
+
+      rules.forEach(function(r) {
+        var isDef = r.is_default === true || r.is_default === 'TRUE' || r.is_default === 'true';
+        html += '<tr>' +
+          '<td><strong>' + escapeHtml(r.name) + '</strong></td>' +
+          '<td class="number">' + formatPercent(r.tax_pct) + '</td>' +
+          '<td class="number">' + formatPercent(r.gst_pct) + '</td>' +
+          '<td class="number">' + formatPercent(r.donations_pct) + '</td>' +
+          '<td class="number">' + formatPercent(r.savings_pct) + '</td>' +
+          '<td class="number">' + formatPercent(r.investments_pct) + '</td>' +
+          '<td class="number">' + formatPercent(r.spending_pct) + '</td>' +
+          '<td>' + (isDef ? 'Yes' : '') + '</td>' +
+          '<td>' + escapeHtml(r.notes) + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<p>No budget rules configured. Add one to start allocating invoice payments.</p>';
+    }
+
+    content.innerHTML = html;
+
+    // Live sum display for the form
+    var pctFields = ['br-tax', 'br-gst', 'br-donations', 'br-savings', 'br-investments', 'br-spending'];
+    pctFields.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateRuleSum);
+    });
+    updateRuleSum();
+  });
+}
+
+function updateRuleSum() {
+  var ids = ['br-tax', 'br-gst', 'br-donations', 'br-savings', 'br-investments', 'br-spending'];
+  var sum = ids.reduce(function(s, id) {
+    return s + (Number(document.getElementById(id).value) || 0);
+  }, 0);
+
+  var display = document.getElementById('br-sum-display');
+  if (display) {
+    var pct = (sum * 100).toFixed(1);
+    display.textContent = 'Total: ' + pct + '%';
+    display.style.color = Math.abs(sum - 1.0) < 0.001 ? 'green' : 'red';
+  }
+}
+
+function submitBudgetRule(event) {
+  event.preventDefault();
+  var data = {
+    name: document.getElementById('br-name').value,
+    tax_pct: Number(document.getElementById('br-tax').value),
+    gst_pct: Number(document.getElementById('br-gst').value),
+    donations_pct: Number(document.getElementById('br-donations').value),
+    savings_pct: Number(document.getElementById('br-savings').value),
+    investments_pct: Number(document.getElementById('br-investments').value),
+    spending_pct: Number(document.getElementById('br-spending').value),
+    is_default: document.getElementById('br-default').checked,
+    notes: document.getElementById('br-notes').value
+  };
+
+  serverCall('addBudgetRule', data).then(function() {
+    showToast('Budget rule added!');
+    AppCache.budgetRules = null;
+    renderRuleSettings();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+</script>

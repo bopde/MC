@@ -1,0 +1,213 @@
+<script>
+/**
+ * Budget Allocations module.
+ * - Allocate invoice amounts to budget categories
+ * - View summary of all allocations
+ * - Track transfer status
+ */
+
+function renderBudgetPage(container) {
+  container.innerHTML =
+    '<div class="tab-bar">' +
+      '<button class="active" onclick="showBudgetTab(\'summary\')">Summary</button>' +
+      '<button onclick="showBudgetTab(\'allocate\')">Allocate Invoice</button>' +
+    '</div>' +
+    '<div id="budget-tab-content"></div>';
+
+  showBudgetTab('summary');
+}
+
+function showBudgetTab(tab) {
+  document.querySelectorAll('.tab-bar button').forEach(function(btn, i) {
+    btn.classList.toggle('active', (tab === 'summary' && i === 0) || (tab === 'allocate' && i === 1));
+  });
+
+  if (tab === 'summary') {
+    renderBudgetSummary();
+  } else {
+    renderBudgetAllocate();
+  }
+}
+
+// --- Budget Summary ---
+
+function renderBudgetSummary() {
+  var content = document.getElementById('budget-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading budget summary...</div>';
+
+  serverCall('getBudgetSummary').then(function(summary) {
+    if (!summary || Object.keys(summary).length === 0) {
+      content.innerHTML = '<p>No budget allocations yet. Allocate an invoice to see the breakdown.</p>';
+      return;
+    }
+
+    var categories = ['tax', 'gst', 'donations', 'savings', 'investments', 'spending'];
+    var grandTotal = 0;
+
+    // Summary cards
+    var html = '<div class="summary-grid">';
+    categories.forEach(function(cat) {
+      var data = summary[cat] || { total: 0, pending: 0, transferred: 0, reconciled: 0 };
+      grandTotal += data.total;
+      html += '<div class="summary-card">' +
+        '<h4>' + cat + '</h4>' +
+        '<div class="value">' + formatCurrency(data.total) + '</div>' +
+        '<div class="detail">' +
+          '<span class="badge badge-pending">Pending: ' + formatCurrency(data.pending) + '</span> ' +
+          '<span class="badge badge-transferred">Moved: ' + formatCurrency(data.transferred) + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+
+    html += '<p><strong>Total allocated:</strong> ' + formatCurrency(grandTotal) + '</p>';
+
+    // Detailed breakdown table
+    html += '<details><summary><strong>Detailed Breakdown</strong></summary>';
+    categories.forEach(function(cat) {
+      var data = summary[cat];
+      if (!data || !data.items || data.items.length === 0) return;
+
+      html += '<h4 style="text-transform:capitalize;margin-top:1rem;">' + cat + '</h4>' +
+        '<table><thead><tr>' +
+          '<th>Invoice</th><th>Business</th><th class="number">Amount</th>' +
+          '<th>Status</th><th>Actions</th>' +
+        '</tr></thead><tbody>';
+
+      data.items.forEach(function(item) {
+        html += '<tr>' +
+          '<td>' + escapeHtml(item.invoice_id) + '</td>' +
+          '<td>' + escapeHtml(item.business_name) + '</td>' +
+          '<td class="number">' + formatCurrency(item.amount) + '</td>' +
+          '<td><span class="badge badge-' + item.status + '">' + item.status + '</span></td>' +
+          '<td class="actions">';
+
+        if (item.status === 'pending') {
+          html += '<button class="outline" onclick="markTransferred(\'' + item.allocation_id + '\')">Mark Transferred</button>';
+        } else if (item.status === 'transferred') {
+          html += '<button class="outline" onclick="markReconciled(\'' + item.allocation_id + '\')">Mark Reconciled</button>';
+        }
+
+        html += '</td></tr>';
+      });
+      html += '</tbody></table>';
+    });
+    html += '</details>';
+
+    content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function markTransferred(allocationId) {
+  serverCall('updateAllocationStatusFromClient', allocationId + '|transferred|' + todayStr()).then(function() {
+    showToast('Marked as transferred!');
+    renderBudgetSummary();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+function markReconciled(allocationId) {
+  serverCall('updateAllocationStatusFromClient', allocationId + '|reconciled|').then(function() {
+    showToast('Marked as reconciled!');
+    renderBudgetSummary();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+// --- Allocate Invoice ---
+
+function renderBudgetAllocate() {
+  var content = document.getElementById('budget-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading invoices...</div>';
+
+  serverCall('getInvoicesWithDetails').then(function(invoices) {
+    // Filter to paid invoices without allocations (or all for flexibility)
+    var rules = AppCache.budgetRules || [];
+
+    if (invoices.length === 0) {
+      content.innerHTML = '<p>No invoices found. Create an invoice first.</p>';
+      return;
+    }
+
+    var html =
+      '<form id="allocate-form">' +
+        '<div class="form-row">' +
+          '<label>Invoice ' + buildSelect('ba-invoice', invoices.map(function(inv) {
+            return { id: inv.invoice_id, label: inv.invoice_id + ' - ' + inv.business_name + ' (' + formatCurrency(inv.total) + ')' };
+          }), 'id', 'label', { required: true }) + '</label>' +
+          '<label>Budget Rule ' + buildSelect('ba-rule', rules, 'rule_id', 'name', { required: true }) + '</label>' +
+        '</div>' +
+        '<div class="form-actions">' +
+          '<button type="button" onclick="previewAllocation()">Preview Allocation</button>' +
+        '</div>' +
+      '</form>' +
+      '<div id="allocation-preview"></div>';
+
+    content.innerHTML = html;
+  });
+}
+
+function previewAllocation() {
+  var invoiceId = document.getElementById('ba-invoice').value;
+  var ruleId = document.getElementById('ba-rule').value;
+
+  if (!invoiceId || !ruleId) {
+    showToast('Please select an invoice and a budget rule.', 'error');
+    return;
+  }
+
+  // Find the invoice and rule in cache/loaded data
+  var rule = (AppCache.budgetRules || []).find(function(r) { return r.rule_id === ruleId; });
+  if (!rule) { showToast('Rule not found', 'error'); return; }
+
+  // Get invoice total
+  serverCall('getInvoiceDetails', invoiceId).then(function(data) {
+    var total = Number(data.invoice.total);
+    var preview = document.getElementById('allocation-preview');
+
+    var categories = [
+      { name: 'Tax', pct: rule.tax_pct },
+      { name: 'GST', pct: rule.gst_pct },
+      { name: 'Donations', pct: rule.donations_pct },
+      { name: 'Savings', pct: rule.savings_pct },
+      { name: 'Investments', pct: rule.investments_pct },
+      { name: 'Spending', pct: rule.spending_pct }
+    ];
+
+    var html = '<h4>Allocation Preview for ' + escapeHtml(data.invoice.invoice_id) + '</h4>' +
+      '<p>Total: ' + formatCurrency(total) + ' | Rule: ' + escapeHtml(rule.name) + '</p>' +
+      '<table><thead><tr><th>Category</th><th class="number">%</th><th class="number">Amount</th></tr></thead><tbody>';
+
+    var allocTotal = 0;
+    categories.forEach(function(cat) {
+      var pct = Number(cat.pct) || 0;
+      var amount = Math.round(total * pct * 100) / 100;
+      allocTotal += amount;
+      html += '<tr><td>' + cat.name + '</td><td class="number">' + formatPercent(pct) + '</td>' +
+        '<td class="number">' + formatCurrency(amount) + '</td></tr>';
+    });
+
+    html += '<tr><td><strong>Total</strong></td><td></td><td class="number"><strong>' + formatCurrency(allocTotal) + '</strong></td></tr>';
+    html += '</tbody></table>';
+
+    html += '<div class="form-actions">' +
+      '<button onclick="confirmAllocation()">Confirm Allocation</button>' +
+      '<button class="outline secondary" onclick="document.getElementById(\'allocation-preview\').innerHTML=\'\'">Cancel</button>' +
+      '</div>';
+
+    preview.innerHTML = html;
+  });
+}
+
+function confirmAllocation() {
+  var invoiceId = document.getElementById('ba-invoice').value;
+  var ruleId = document.getElementById('ba-rule').value;
+
+  serverCall('allocateBudgetFromClient', invoiceId + '|' + ruleId).then(function() {
+    showToast('Budget allocated successfully!');
+    showBudgetTab('summary');
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+</script>

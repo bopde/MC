@@ -1,0 +1,145 @@
+<script>
+/**
+ * Shared utility functions for the frontend.
+ */
+
+// Cache for reference data (businesses, codes, accounts, rules)
+var AppCache = {
+  businesses: null,
+  workCodes: null,
+  accounts: null,
+  budgetRules: null,
+
+  clear: function() {
+    this.businesses = null;
+    this.workCodes = null;
+    this.accounts = null;
+    this.budgetRules = null;
+  }
+};
+
+/**
+ * Wrapper around google.script.run for cleaner async calls.
+ * Returns a Promise.
+ */
+function serverCall(functionName, args) {
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(function(err) {
+        reject(new Error(err.message || err));
+      });
+
+    if (args !== undefined) {
+      runner[functionName](args);
+    } else {
+      runner[functionName]();
+    }
+  });
+}
+
+/**
+ * Show a toast notification.
+ */
+function showToast(message, type) {
+  type = type || 'success';
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(function() { toast.remove(); }, 3000);
+}
+
+/**
+ * Format a number as currency.
+ */
+function formatCurrency(amount, currency) {
+  currency = currency || 'NZD';
+  return new Intl.NumberFormat('en-NZ', {
+    style: 'currency',
+    currency: currency
+  }).format(amount || 0);
+}
+
+/**
+ * Format a date string for display.
+ */
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  var d = new Date(dateStr);
+  return d.toLocaleDateString('en-NZ', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * Format a number as percentage.
+ */
+function formatPercent(value) {
+  return (Number(value) * 100).toFixed(1) + '%';
+}
+
+/**
+ * Generate an HTML <select> from an array of items.
+ */
+function buildSelect(id, items, valueField, labelField, options) {
+  options = options || {};
+  var html = '<select id="' + id + '" name="' + id + '"' +
+             (options.required ? ' required' : '') + '>';
+  if (options.placeholder !== false) {
+    html += '<option value="">' + (options.placeholder || 'Select...') + '</option>';
+  }
+  items.forEach(function(item) {
+    var selected = options.selected === item[valueField] ? ' selected' : '';
+    html += '<option value="' + escapeHtml(item[valueField]) + '"' + selected + '>' +
+            escapeHtml(item[labelField]) + '</option>';
+  });
+  html += '</select>';
+  return html;
+}
+
+/**
+ * Escape HTML entities.
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Load reference data into cache. Returns a promise.
+ */
+function loadReferenceData() {
+  var promises = [];
+  if (!AppCache.businesses) {
+    promises.push(serverCall('getBusinesses').then(function(data) { AppCache.businesses = data; }));
+  }
+  if (!AppCache.workCodes) {
+    promises.push(serverCall('getWorkCodes').then(function(data) { AppCache.workCodes = data; }));
+  }
+  if (!AppCache.accounts) {
+    promises.push(serverCall('getAccounts').then(function(data) { AppCache.accounts = data; }));
+  }
+  if (!AppCache.budgetRules) {
+    promises.push(serverCall('getBudgetRules').then(function(data) { AppCache.budgetRules = data; }));
+  }
+  return Promise.all(promises);
+}
+
+/**
+ * Get today's date as YYYY-MM-DD.
+ */
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Get current month as YYYY-MM.
+ */
+function currentMonth() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+</script>
