@@ -46,19 +46,32 @@ function getAccountSummariesForMonth(month) {
   accounts.forEach(function(a) { accMap[a.account_id] = a; });
 
   return summaries.map(function(s) {
-    s.account_name = accMap[s.account_id] ? accMap[s.account_id].name : 'Unknown';
-    s.account_type = accMap[s.account_id] ? accMap[s.account_id].type : '';
+    var acc = accMap[s.account_id];
+    s.account_name = acc ? acc.name : 'Unknown';
+    s.account_type = acc ? acc.type : '';
+    s.currency = acc ? acc.currency : 'NZD';
     return s;
   });
 }
 
 /**
  * Get a year-to-date overview of all accounts.
- * Returns monthly data for each account for the specified year.
+ * Returns monthly data for each account for the specified year,
+ * INCLUDING Jan-Mar of the following year for tax overlap.
  */
 function getYearOverview(year) {
+  var nextYear = (parseInt(year) + 1).toString();
+
   var summaries = getAll('AccountSummaries').filter(function(s) {
-    return s.month && s.month.startsWith(year);
+    if (!s.month) return false;
+    // Include all months of the base year
+    if (s.month.startsWith(year)) return true;
+    // Include Jan-Mar of the following year
+    if (s.month.startsWith(nextYear)) {
+      var monthNum = parseInt(s.month.split('-')[1], 10);
+      return monthNum >= 1 && monthNum <= 3;
+    }
+    return false;
   });
 
   var accounts = getActive('Accounts');

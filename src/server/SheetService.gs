@@ -90,7 +90,12 @@ function updateRow(sheetName, rowIndex, data) {
  */
 function findById(sheetName, id) {
   var rows = getAll(sheetName);
-  var idField = Object.keys(rows[0] || {})[0];
+  if (rows.length === 0) return null;
+
+  // Get the ID field name from the first key (excluding _rowIndex)
+  var keys = Object.keys(rows[0]).filter(function(k) { return k !== '_rowIndex'; });
+  var idField = keys[0];
+
   for (var i = 0; i < rows.length; i++) {
     if (rows[i][idField] === id) return rows[i];
   }
@@ -107,4 +112,14 @@ function valueExists(sheetName, column, value) {
   return rows.some(function(row) {
     return row[column] && row[column].toString().toLowerCase() === lower;
   });
+}
+
+/**
+ * Find the column index (1-based) for a given header name in a sheet.
+ */
+function getColumnIndex(sheet, headerName) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var idx = headers.indexOf(headerName);
+  if (idx === -1) throw new Error('Column not found: ' + headerName + ' in sheet ' + sheet.getName());
+  return idx + 1; // 1-based
 }

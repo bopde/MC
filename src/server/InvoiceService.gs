@@ -9,7 +9,7 @@
 function getUninvoicedItemsInternal(businessId, dateFrom, dateTo) {
   var from = new Date(dateFrom);
   var to = new Date(dateTo);
-  to.setHours(23, 59, 59); // Include the full end date
+  to.setHours(23, 59, 59);
 
   var timeEntries = getAll('TimeEntries').filter(function(te) {
     var d = new Date(te.date);
@@ -32,8 +32,10 @@ function getUninvoicedItemsInternal(businessId, dateFrom, dateTo) {
  * Generate an invoice from time entries and expenses.
  * Marks all included items as invoiced.
  *
- * @param {Object} params - { businessId, dateFrom, dateTo, description, notes, lineDescriptions }
- *   lineDescriptions: { workCode: "description for this code" }
+ * @param {Object} params - {
+ *   businessId, dateFrom, dateTo, includeGst, gstRate,
+ *   description, notes, lineDescriptions: { workCode: "description" }
+ * }
  * @returns {Object} The created invoice
  */
 function generateInvoice(params) {
@@ -54,7 +56,11 @@ function generateInvoice(params) {
   }, 0);
 
   var subtotal = timeSubtotal + expenseSubtotal;
-  var gstAmount = Math.round(subtotal * 0.15 * 100) / 100; // 15% NZ GST
+
+  // GST: optional, configurable rate
+  var includeGst = params.includeGst === true || params.includeGst === 'true';
+  var gstRate = includeGst ? (Number(params.gstRate) || 0.15) : 0;
+  var gstAmount = includeGst ? Math.round(subtotal * gstRate * 100) / 100 : 0;
   var total = subtotal + gstAmount;
 
   // Create the invoice
@@ -63,26 +69,31 @@ function generateInvoice(params) {
     date_from: params.dateFrom,
     date_to: params.dateTo,
     created_date: new Date().toISOString().split('T')[0],
+    include_gst: includeGst,
+    gst_rate: gstRate,
     subtotal: subtotal,
     gst_amount: gstAmount,
     total: total,
     status: 'draft',
     budget_rule_id: '',
+    tax_withheld: Number(params.taxWithheld) || 0,
     description: params.description || '',
     notes: params.notes || ''
   });
 
-  // Mark time entries as invoiced
+  // Mark time entries as invoiced (look up column dynamically)
   var ss = getSpreadsheet();
   var teSheet = ss.getSheetByName('TimeEntries');
+  var teInvCol = getColumnIndex(teSheet, 'invoice_id');
   items.timeEntries.forEach(function(te) {
-    teSheet.getRange(te._rowIndex, 11).setValue(invoice.invoice_id); // invoice_id column
+    teSheet.getRange(te._rowIndex, teInvCol).setValue(invoice.invoice_id);
   });
 
   // Mark expenses as invoiced
   var expSheet = ss.getSheetByName('Expenses');
+  var expInvCol = getColumnIndex(expSheet, 'invoice_id');
   items.expenses.forEach(function(exp) {
-    expSheet.getRange(exp._rowIndex, 7).setValue(invoice.invoice_id); // invoice_id column
+    expSheet.getRange(exp._rowIndex, expInvCol).setValue(invoice.invoice_id);
   });
 
   return invoice;
@@ -110,11 +121,12 @@ function getInvoiceDetails(invoiceId) {
   timeEntries.forEach(function(te) {
     var code = te.work_code;
     if (!codeGroups[code]) {
-      codeGroups[code] = { code: code, entries: [], totalHours: 0, totalAmount: 0 };
+      codeGroups[code] = { code: code, entries: [], totalHours: 0, totalAmount: 0, rate: 0 };
     }
     codeGroups[code].entries.push(te);
     codeGroups[code].totalHours += Number(te.hours) || 0;
     codeGroups[code].totalAmount += Number(te.line_total) || 0;
+    if (te.rate) codeGroups[code].rate = Number(te.rate);
   });
 
   // Get allocations if they exist
@@ -122,9 +134,13 @@ function getInvoiceDetails(invoiceId) {
     return a.invoice_id === invoiceId;
   });
 
+  // Get "my details" for the invoice header
+  var myDetails = getMyDetails();
+
   return {
     invoice: invoice,
     business: business,
+    myDetails: myDetails,
     codeGroups: Object.values(codeGroups),
     expenses: expenses,
     allocations: allocations
@@ -135,7 +151,7 @@ function getInvoiceDetails(invoiceId) {
  * Update invoice status (draft -> sent -> paid).
  */
 function updateInvoiceStatus(invoiceId, newStatus) {
-  var validStatuses = ['draft', 'sent', 'paid'];
+  var validStatuses = ['draft', 'sent', 'paid', 'void'];
   if (validStatuses.indexOf(newStatus) === -1) {
     throw new Error('Invalid status: ' + newStatus);
   }
@@ -149,7 +165,7 @@ function updateInvoiceStatus(invoiceId, newStatus) {
 }
 
 /**
- * Get all invoices with business name attached.
+ * Get all invoices with business name and currency attached.
  */
 function getInvoicesWithDetails() {
   var invoices = getAll('Invoices');
@@ -158,7 +174,9 @@ function getInvoicesWithDetails() {
   businesses.forEach(function(b) { bizMap[b.business_id] = b; });
 
   return invoices.map(function(inv) {
-    inv.business_name = bizMap[inv.business_id] ? bizMap[inv.business_id].name : 'Unknown';
+    var biz = bizMap[inv.business_id];
+    inv.business_name = biz ? biz.name : 'Unknown';
+    inv.currency = biz ? biz.currency : 'NZD';
     return inv;
   });
 }

@@ -1,6 +1,6 @@
 /**
  * Settings service for managing reference data:
- * Businesses, WorkCodes, Accounts, BudgetRules
+ * Businesses, WorkCodes, Accounts, BudgetRules, MyDetails
  */
 
 // --- Businesses ---
@@ -52,6 +52,7 @@ function addAccount(data) {
     throw new Error('An account with this name already exists.');
   }
   data.active = true;
+  if (!data.currency) data.currency = 'NZD';
   return appendRow('Accounts', data);
 }
 
@@ -107,4 +108,41 @@ function getDefaultBudgetRule() {
   return rules.find(function(r) {
     return r.is_default === true || r.is_default === 'TRUE' || r.is_default === 'true';
   }) || null;
+}
+
+// --- My Details (Invoice From) ---
+
+function getMyDetails() {
+  var rows = getAll('MyDetails');
+  var details = {};
+  rows.forEach(function(r) {
+    details[r.key] = r.value;
+  });
+  return details;
+}
+
+function saveMyDetails(data) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName('MyDetails');
+  if (!sheet) throw new Error('MyDetails sheet not found. Run setupSheets() first.');
+
+  var existing = sheet.getDataRange().getValues();
+  var headers = existing[0];
+
+  // For each key in data, find the row and update, or append
+  Object.keys(data).forEach(function(key) {
+    var found = false;
+    for (var i = 1; i < existing.length; i++) {
+      if (existing[i][0] === key) {
+        sheet.getRange(i + 1, 2).setValue(data[key]);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      sheet.appendRow([key, data[key]]);
+    }
+  });
+
+  return getMyDetails();
 }

@@ -9,12 +9,14 @@ var AppCache = {
   workCodes: null,
   accounts: null,
   budgetRules: null,
+  myDetails: null,
 
   clear: function() {
     this.businesses = null;
     this.workCodes = null;
     this.accounts = null;
     this.budgetRules = null;
+    this.myDetails = null;
   }
 };
 
@@ -51,14 +53,19 @@ function showToast(message, type) {
 }
 
 /**
- * Format a number as currency.
+ * Format a number as currency with the correct currency code.
  */
 function formatCurrency(amount, currency) {
   currency = currency || 'NZD';
-  return new Intl.NumberFormat('en-NZ', {
-    style: 'currency',
-    currency: currency
-  }).format(amount || 0);
+  try {
+    return new Intl.NumberFormat('en-NZ', {
+      style: 'currency',
+      currency: currency
+    }).format(amount || 0);
+  } catch (e) {
+    // Fallback for unknown currency codes
+    return currency + ' ' + (Number(amount) || 0).toFixed(2);
+  }
 }
 
 /**
@@ -125,6 +132,9 @@ function loadReferenceData() {
   if (!AppCache.budgetRules) {
     promises.push(serverCall('getBudgetRules').then(function(data) { AppCache.budgetRules = data; }));
   }
+  if (!AppCache.myDetails) {
+    promises.push(serverCall('getMyDetails').then(function(data) { AppCache.myDetails = data; }));
+  }
   return Promise.all(promises);
 }
 
@@ -141,5 +151,25 @@ function todayStr() {
 function currentMonth() {
   var d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+/**
+ * Look up the currency for a business by ID.
+ */
+function getCurrencyForBusiness(businessId) {
+  if (!AppCache.businesses) return 'NZD';
+  var biz = AppCache.businesses.find(function(b) { return b.business_id === businessId; });
+  return (biz && biz.currency) || 'NZD';
+}
+
+/**
+ * Build a work code select that shows "CODE - Description".
+ */
+function buildCodeSelect(id, codes, options) {
+  options = options || {};
+  var items = (codes || []).map(function(c) {
+    return { value: c.code_id, label: c.code_id + ' - ' + c.description };
+  });
+  return buildSelect(id, items, 'value', 'label', options);
 }
 </script>

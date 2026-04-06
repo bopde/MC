@@ -1,37 +1,89 @@
 <script>
 /**
  * Settings module.
- * Manage reference data: Businesses, Work Codes, Accounts, Budget Rules.
+ * Manage reference data: My Details, Businesses, Work Codes, Accounts, Budget Rules.
  */
 
 function renderSettingsPage(container) {
   container.innerHTML =
-    '<div class="tab-bar">' +
-      '<button class="active" onclick="showSettingsTab(\'businesses\')">Businesses</button>' +
+    '<div class="tab-bar" id="settings-tabs">' +
+      '<button class="active" onclick="showSettingsTab(\'mydetails\')">My Details</button>' +
+      '<button onclick="showSettingsTab(\'businesses\')">Businesses</button>' +
       '<button onclick="showSettingsTab(\'codes\')">Work Codes</button>' +
       '<button onclick="showSettingsTab(\'accounts\')">Accounts</button>' +
       '<button onclick="showSettingsTab(\'rules\')">Budget Rules</button>' +
     '</div>' +
     '<div id="settings-tab-content"></div>';
 
-  showSettingsTab('businesses');
+  showSettingsTab('mydetails');
 }
 
 function showSettingsTab(tab) {
-  document.querySelectorAll('.tab-bar button').forEach(function(btn) {
-    btn.classList.remove('active');
-  });
-  // Find the right button
-  var labels = { businesses: 0, codes: 1, accounts: 2, rules: 3 };
-  document.querySelectorAll('.tab-bar button')[labels[tab]].classList.add('active');
+  var btns = document.querySelectorAll('#settings-tabs button');
+  btns.forEach(function(btn) { btn.classList.remove('active'); });
+  var labels = { mydetails: 0, businesses: 1, codes: 2, accounts: 3, rules: 4 };
+  btns[labels[tab]].classList.add('active');
 
   var renderers = {
+    mydetails: renderMyDetailsSettings,
     businesses: renderBusinessSettings,
     codes: renderCodeSettings,
     accounts: renderAccountSettings,
     rules: renderRuleSettings
   };
   renderers[tab]();
+}
+
+// --- My Details (Invoice From) ---
+
+function renderMyDetailsSettings() {
+  var content = document.getElementById('settings-tab-content');
+  var my = AppCache.myDetails || {};
+
+  content.innerHTML =
+    '<p>These details appear on your invoices as the "From" section.</p>' +
+    '<form id="my-details-form" onsubmit="saveMyDetailsForm(event)">' +
+      '<div class="form-row">' +
+        '<label>Business / Your Name <input type="text" id="md-biz-name" value="' + escapeHtml(my.business_name || '') + '"></label>' +
+        '<label>Contact Name <input type="text" id="md-contact" value="' + escapeHtml(my.contact_name || '') + '"></label>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label>Email <input type="email" id="md-email" value="' + escapeHtml(my.email || '') + '"></label>' +
+        '<label>Phone <input type="text" id="md-phone" value="' + escapeHtml(my.phone || '') + '"></label>' +
+      '</div>' +
+      '<label>Address <textarea id="md-address" rows="2">' + escapeHtml(my.address || '') + '</textarea></label>' +
+      '<div class="form-row">' +
+        '<label>Tax Number (IRD / EIN) <input type="text" id="md-tax" value="' + escapeHtml(my.tax_number || '') + '"></label>' +
+        '<label>GST Number <input type="text" id="md-gst" value="' + escapeHtml(my.gst_number || '') + '"></label>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label>Bank Account (for payment) <input type="text" id="md-bank" value="' + escapeHtml(my.bank_account || '') + '"></label>' +
+        '<label>Payment Terms <input type="text" id="md-terms" value="' + escapeHtml(my.payment_terms || '') + '" placeholder="e.g. Due within 14 days"></label>' +
+      '</div>' +
+      '<div class="form-actions"><button type="submit">Save Details</button></div>' +
+    '</form>';
+}
+
+function saveMyDetailsForm(event) {
+  event.preventDefault();
+  var data = {
+    business_name: document.getElementById('md-biz-name').value,
+    contact_name: document.getElementById('md-contact').value,
+    email: document.getElementById('md-email').value,
+    phone: document.getElementById('md-phone').value,
+    address: document.getElementById('md-address').value,
+    tax_number: document.getElementById('md-tax').value,
+    gst_number: document.getElementById('md-gst').value,
+    bank_account: document.getElementById('md-bank').value,
+    payment_terms: document.getElementById('md-terms').value
+  };
+
+  serverCall('saveMyDetails', data).then(function(details) {
+    AppCache.myDetails = details;
+    showToast('Details saved!');
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
 }
 
 // --- Businesses ---
@@ -50,8 +102,14 @@ function renderBusinessSettings() {
         '</div>' +
         '<div class="form-row">' +
           '<label>Email <input type="email" id="biz-email"></label>' +
-          '<label>Default Rate ($/hr) <input type="number" id="biz-rate" step="0.01"></label>' +
-          '<label>Currency <input type="text" id="biz-currency" value="NZD"></label>' +
+          '<label>Default Rate (per hr) <input type="number" id="biz-rate" step="0.01"></label>' +
+          '<label>Currency <select id="biz-currency">' +
+            '<option value="NZD">NZD</option>' +
+            '<option value="USD">USD</option>' +
+            '<option value="AUD">AUD</option>' +
+            '<option value="GBP">GBP</option>' +
+            '<option value="EUR">EUR</option>' +
+          '</select></label>' +
         '</div>' +
         '<label>Address <textarea id="biz-address" rows="2"></textarea></label>' +
         '<div class="form-actions"><button type="submit">Add Business</button></div>' +
@@ -65,13 +123,14 @@ function renderBusinessSettings() {
 
       businesses.forEach(function(b) {
         var isActive = b.active === true || b.active === 'TRUE' || b.active === 'true';
+        var cur = b.currency || 'NZD';
         html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
           '<td>' + escapeHtml(b.business_id) + '</td>' +
           '<td>' + escapeHtml(b.name) + '</td>' +
           '<td>' + escapeHtml(b.contact_name) + '</td>' +
           '<td>' + escapeHtml(b.email) + '</td>' +
-          '<td class="number">' + formatCurrency(b.default_rate) + '</td>' +
-          '<td>' + escapeHtml(b.currency) + '</td>' +
+          '<td class="number">' + formatCurrency(b.default_rate, cur) + '</td>' +
+          '<td>' + escapeHtml(cur) + '</td>' +
           '<td>' +
             (isActive
               ? '<button class="outline secondary" onclick="toggleBusiness(' + b._rowIndex + ', false)">Deactivate</button>'
@@ -85,6 +144,8 @@ function renderBusinessSettings() {
     }
 
     content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -127,8 +188,8 @@ function renderCodeSettings() {
       '<details><summary><strong>Add New Work Code</strong></summary>' +
       '<form id="add-code-form" onsubmit="submitWorkCode(event)">' +
         '<div class="form-row">' +
-          '<label>Code ID <input type="text" id="wc-id" required placeholder="e.g. DEV, DESIGN"></label>' +
-          '<label>Description <input type="text" id="wc-desc" required></label>' +
+          '<label>Code ID <input type="text" id="wc-id" required placeholder="e.g. DEV, DESIGN, PM"></label>' +
+          '<label>Description <input type="text" id="wc-desc" required placeholder="e.g. Software Development"></label>' +
           '<label>Category <select id="wc-cat"><option value="billable">Billable</option><option value="non-billable">Non-billable</option></select></label>' +
         '</div>' +
         '<div class="form-actions"><button type="submit">Add Code</button></div>' +
@@ -154,6 +215,8 @@ function renderCodeSettings() {
     }
 
     content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -201,19 +264,29 @@ function renderAccountSettings() {
             '<option value="crypto">Crypto</option>' +
             '<option value="other">Other</option>' +
           '</select></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Currency <select id="acc-currency">' +
+            '<option value="NZD">NZD</option>' +
+            '<option value="USD">USD</option>' +
+            '<option value="AUD">AUD</option>' +
+            '<option value="GBP">GBP</option>' +
+            '<option value="EUR">EUR</option>' +
+          '</select></label>' +
           '<label>Purpose <input type="text" id="acc-purpose" placeholder="e.g. savings, tax, spending"></label>' +
         '</div>' +
         '<div class="form-actions"><button type="submit">Add Account</button></div>' +
       '</form></details>';
 
     if (accounts.length > 0) {
-      html += '<table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Purpose</th><th>Active</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Currency</th><th>Purpose</th><th>Active</th></tr></thead><tbody>';
       accounts.forEach(function(a) {
         var isActive = a.active === true || a.active === 'TRUE' || a.active === 'true';
         html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
           '<td>' + escapeHtml(a.account_id) + '</td>' +
           '<td>' + escapeHtml(a.name) + '</td>' +
           '<td>' + escapeHtml(a.type) + '</td>' +
+          '<td>' + escapeHtml(a.currency || 'NZD') + '</td>' +
           '<td>' + escapeHtml(a.purpose) + '</td>' +
           '<td>' +
             (isActive
@@ -227,6 +300,8 @@ function renderAccountSettings() {
     }
 
     content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -235,6 +310,7 @@ function submitAccount(event) {
   var data = {
     name: document.getElementById('acc-name').value,
     type: document.getElementById('acc-type').value,
+    currency: document.getElementById('acc-currency').value || 'NZD',
     purpose: document.getElementById('acc-purpose').value
   };
 
@@ -262,22 +338,31 @@ function renderRuleSettings() {
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
   serverCall('getBudgetRules').then(function(rules) {
+    var pctFields = [
+      { id: 'br-tax-withheld', label: 'Tax Withheld %', field: 'tax_withheld_pct', default: '0' },
+      { id: 'br-tax-to-pay', label: 'Tax To Pay %', field: 'tax_to_pay_pct', default: '0.28' },
+      { id: 'br-acc-withheld', label: 'ACC Withheld %', field: 'acc_withheld_pct', default: '0' },
+      { id: 'br-acc-to-pay', label: 'ACC To Pay %', field: 'acc_to_pay_pct', default: '0.02' },
+      { id: 'br-donate', label: 'Donate %', field: 'donate_pct', default: '0.05' },
+      { id: 'br-save', label: 'Save %', field: 'save_pct', default: '0.10' },
+      { id: 'br-invest', label: 'Invest %', field: 'invest_pct', default: '0.15' },
+      { id: 'br-spend', label: 'Spend %', field: 'spend_pct', default: '0.40' }
+    ];
+
     var html =
       '<details><summary><strong>Add New Budget Rule</strong></summary>' +
       '<form id="add-rule-form" onsubmit="submitBudgetRule(event)">' +
         '<div class="form-row">' +
           '<label>Rule Name <input type="text" id="br-name" required placeholder="e.g. Default Split"></label>' +
         '</div>' +
-        '<div class="form-row">' +
-          '<label>Tax % <input type="number" id="br-tax" step="0.01" value="0.28" required></label>' +
-          '<label>GST % <input type="number" id="br-gst" step="0.01" value="0.15" required></label>' +
-          '<label>Donations % <input type="number" id="br-donations" step="0.01" value="0.05" required></label>' +
-        '</div>' +
-        '<div class="form-row">' +
-          '<label>Savings % <input type="number" id="br-savings" step="0.01" value="0.10" required></label>' +
-          '<label>Investments % <input type="number" id="br-investments" step="0.01" value="0.10" required></label>' +
-          '<label>Spending % <input type="number" id="br-spending" step="0.01" value="0.32" required></label>' +
-        '</div>' +
+        '<div class="form-row">';
+
+    pctFields.forEach(function(f, i) {
+      html += '<label>' + f.label + ' <input type="number" id="' + f.id + '" step="0.01" value="' + f.default + '" required></label>';
+      if (i === 3) html += '</div><div class="form-row">'; // break into two rows
+    });
+
+    html += '</div>' +
         '<div class="form-row">' +
           '<label><input type="checkbox" id="br-default"> Set as default rule</label>' +
           '<label>Notes <input type="text" id="br-notes"></label>' +
@@ -288,25 +373,20 @@ function renderRuleSettings() {
 
     if (rules.length > 0) {
       html += '<table><thead><tr>' +
-        '<th>Name</th><th class="number">Tax</th><th class="number">GST</th>' +
-        '<th class="number">Donations</th><th class="number">Savings</th>' +
-        '<th class="number">Investments</th><th class="number">Spending</th>' +
-        '<th>Default</th><th>Notes</th>' +
-        '</tr></thead><tbody>';
+        '<th>Name</th>';
+      pctFields.forEach(function(f) {
+        html += '<th class="number">' + f.label.replace(' %', '') + '</th>';
+      });
+      html += '<th>Default</th><th>Notes</th></tr></thead><tbody>';
 
       rules.forEach(function(r) {
         var isDef = r.is_default === true || r.is_default === 'TRUE' || r.is_default === 'true';
-        html += '<tr>' +
-          '<td><strong>' + escapeHtml(r.name) + '</strong></td>' +
-          '<td class="number">' + formatPercent(r.tax_pct) + '</td>' +
-          '<td class="number">' + formatPercent(r.gst_pct) + '</td>' +
-          '<td class="number">' + formatPercent(r.donations_pct) + '</td>' +
-          '<td class="number">' + formatPercent(r.savings_pct) + '</td>' +
-          '<td class="number">' + formatPercent(r.investments_pct) + '</td>' +
-          '<td class="number">' + formatPercent(r.spending_pct) + '</td>' +
-          '<td>' + (isDef ? 'Yes' : '') + '</td>' +
-          '<td>' + escapeHtml(r.notes) + '</td>' +
-          '</tr>';
+        html += '<tr><td><strong>' + escapeHtml(r.name) + '</strong></td>';
+        pctFields.forEach(function(f) {
+          html += '<td class="number">' + formatPercent(r[f.field]) + '</td>';
+        });
+        html += '<td>' + (isDef ? 'Yes' : '') + '</td>' +
+          '<td>' + escapeHtml(r.notes) + '</td></tr>';
       });
       html += '</tbody></table>';
     } else {
@@ -315,18 +395,20 @@ function renderRuleSettings() {
 
     content.innerHTML = html;
 
-    // Live sum display for the form
-    var pctFields = ['br-tax', 'br-gst', 'br-donations', 'br-savings', 'br-investments', 'br-spending'];
-    pctFields.forEach(function(id) {
-      var el = document.getElementById(id);
+    // Live sum display
+    pctFields.forEach(function(f) {
+      var el = document.getElementById(f.id);
       if (el) el.addEventListener('input', updateRuleSum);
     });
     updateRuleSum();
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
 function updateRuleSum() {
-  var ids = ['br-tax', 'br-gst', 'br-donations', 'br-savings', 'br-investments', 'br-spending'];
+  var ids = ['br-tax-withheld', 'br-tax-to-pay', 'br-acc-withheld', 'br-acc-to-pay',
+             'br-donate', 'br-save', 'br-invest', 'br-spend'];
   var sum = ids.reduce(function(s, id) {
     return s + (Number(document.getElementById(id).value) || 0);
   }, 0);
@@ -343,12 +425,14 @@ function submitBudgetRule(event) {
   event.preventDefault();
   var data = {
     name: document.getElementById('br-name').value,
-    tax_pct: Number(document.getElementById('br-tax').value),
-    gst_pct: Number(document.getElementById('br-gst').value),
-    donations_pct: Number(document.getElementById('br-donations').value),
-    savings_pct: Number(document.getElementById('br-savings').value),
-    investments_pct: Number(document.getElementById('br-investments').value),
-    spending_pct: Number(document.getElementById('br-spending').value),
+    tax_withheld_pct: Number(document.getElementById('br-tax-withheld').value),
+    tax_to_pay_pct: Number(document.getElementById('br-tax-to-pay').value),
+    acc_withheld_pct: Number(document.getElementById('br-acc-withheld').value),
+    acc_to_pay_pct: Number(document.getElementById('br-acc-to-pay').value),
+    donate_pct: Number(document.getElementById('br-donate').value),
+    save_pct: Number(document.getElementById('br-save').value),
+    invest_pct: Number(document.getElementById('br-invest').value),
+    spend_pct: Number(document.getElementById('br-spend').value),
     is_default: document.getElementById('br-default').checked,
     notes: document.getElementById('br-notes').value
   };

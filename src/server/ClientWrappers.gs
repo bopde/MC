@@ -17,11 +17,11 @@ function updateInvoiceStatusFromClient(params) {
 
 /**
  * Allocate budget from client.
- * @param {string} params - "invoiceId|ruleId"
+ * @param {string} params - "invoiceId|ruleId|taxWithheld"
  */
 function allocateBudgetFromClient(params) {
   var parts = params.split('|');
-  return allocateBudget(parts[0], parts[1]);
+  return allocateBudget(parts[0], parts[1], Number(parts[2]) || 0);
 }
 
 /**
@@ -59,11 +59,8 @@ function toggleEntityFromClient(params) {
 
 /**
  * Get uninvoiced items - wrapper that accepts an object.
- * (google.script.run passes objects fine, this is just for clarity)
  */
 function getUninvoicedItems(params) {
-  // params is already an object with { businessId, dateFrom, dateTo }
-  // The InvoiceService function signature matches
   var from = new Date(params.dateFrom);
   var to = new Date(params.dateTo);
   to.setHours(23, 59, 59);

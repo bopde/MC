@@ -8,7 +8,7 @@
 
 function renderHoursPage(container) {
   container.innerHTML =
-    '<div class="tab-bar">' +
+    '<div class="tab-bar" id="hours-tabs">' +
       '<button class="active" onclick="showHoursTab(\'time\')">Time Entries</button>' +
       '<button onclick="showHoursTab(\'expenses\')">Expenses</button>' +
     '</div>' +
@@ -18,7 +18,8 @@ function renderHoursPage(container) {
 }
 
 function showHoursTab(tab) {
-  document.querySelectorAll('.tab-bar button').forEach(function(btn, i) {
+  var btns = document.querySelectorAll('#hours-tabs button');
+  btns.forEach(function(btn, i) {
     btn.classList.toggle('active', (tab === 'time' && i === 0) || (tab === 'expenses' && i === 1));
   });
 
@@ -44,10 +45,10 @@ function renderTimeEntryTab() {
       '<div class="form-row">' +
         '<label>Start Time <input type="time" id="te-start" required></label>' +
         '<label>End Time <input type="time" id="te-end" required></label>' +
-        '<label>Work Code ' + buildSelect('te-code', codes, 'code_id', 'code_id', { required: true }) + '</label>' +
+        '<label>Work Code ' + buildCodeSelect('te-code', codes, { required: true }) + '</label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Rate ($/hr) <input type="number" id="te-rate" step="0.01" required></label>' +
+        '<label>Rate (per hr) <input type="number" id="te-rate" step="0.01" required></label>' +
         '<label>Description <input type="text" id="te-desc" placeholder="What did you work on?"></label>' +
       '</div>' +
       '<div class="form-actions">' +
@@ -114,9 +115,10 @@ function renderTimeEntriesTable(entries) {
 
   entries.forEach(function(e) {
     var bizName = '';
+    var currency = 'NZD';
     if (AppCache.businesses) {
       var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
-      if (biz) bizName = biz.name;
+      if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
     }
     html += '<tr>' +
       '<td>' + formatDate(e.date) + '</td>' +
@@ -126,8 +128,8 @@ function renderTimeEntriesTable(entries) {
       '<td>' + escapeHtml(e.time_end) + '</td>' +
       '<td class="number">' + (Number(e.hours) || 0).toFixed(2) + '</td>' +
       '<td>' + escapeHtml(e.description) + '</td>' +
-      '<td class="number">' + formatCurrency(e.rate) + '</td>' +
-      '<td class="number">' + formatCurrency(e.line_total) + '</td>' +
+      '<td class="number">' + formatCurrency(e.rate, currency) + '</td>' +
+      '<td class="number">' + formatCurrency(e.line_total, currency) + '</td>' +
       '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
       '</tr>';
   });
@@ -135,7 +137,7 @@ function renderTimeEntriesTable(entries) {
   html += '</tbody><tfoot><tr>' +
     '<td colspan="5"><strong>Totals</strong></td>' +
     '<td class="number"><strong>' + totalHours.toFixed(2) + '</strong></td>' +
-    '<td></td><td></td>' +
+    '<td colspan="2"></td>' +
     '<td class="number"><strong>' + formatCurrency(totalAmount) + '</strong></td>' +
     '<td></td></tr></tfoot></table>';
 
@@ -186,9 +188,9 @@ function renderExpenseTab() {
         '<label>Date <input type="date" id="exp-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Amount ($) <input type="number" id="exp-amount" step="0.01" required></label>' +
+        '<label>Amount <input type="number" id="exp-amount" step="0.01" required></label>' +
         '<label>For <input type="text" id="exp-desc" placeholder="What was this expense for?" required></label>' +
-        '<label>Work Code ' + buildSelect('exp-code', codes, 'code_id', 'code_id', { required: true }) + '</label>' +
+        '<label>Work Code ' + buildCodeSelect('exp-code', codes, { required: true }) + '</label>' +
       '</div>' +
       '<div class="form-actions">' +
         '<button type="submit">Add Expense</button>' +
@@ -221,16 +223,17 @@ function loadExpenses() {
 
     expenses.forEach(function(e) {
       var bizName = '';
+      var currency = 'NZD';
       if (AppCache.businesses) {
         var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
-        if (biz) bizName = biz.name;
+        if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
       }
       html += '<tr>' +
         '<td>' + formatDate(e.date) + '</td>' +
         '<td>' + escapeHtml(bizName) + '</td>' +
         '<td>' + escapeHtml(e.work_code) + '</td>' +
         '<td>' + escapeHtml(e.description) + '</td>' +
-        '<td class="number">' + formatCurrency(e.amount) + '</td>' +
+        '<td class="number">' + formatCurrency(e.amount, currency) + '</td>' +
         '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
         '</tr>';
     });
@@ -240,6 +243,9 @@ function loadExpenses() {
       '<td></td></tr></tfoot></table>';
 
     el.innerHTML = html;
+  }).catch(function(err) {
+    document.getElementById('expenses-list').innerHTML =
+      '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 

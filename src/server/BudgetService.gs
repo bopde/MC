@@ -1,13 +1,31 @@
 /**
  * Budget allocation service.
  * Applies budget rules to invoices and tracks money flow.
+ *
+ * Categories: Tax Withheld, Tax To Pay, ACC Withheld, ACC To Pay,
+ *             Donate, Save, Invest, Spend
  */
+
+var BUDGET_CATEGORIES = [
+  'Tax Withheld', 'Tax To Pay', 'ACC Withheld', 'ACC To Pay',
+  'Donate', 'Save', 'Invest', 'Spend'
+];
+
+var BUDGET_PCT_FIELDS = [
+  'tax_withheld_pct', 'tax_to_pay_pct',
+  'acc_withheld_pct', 'acc_to_pay_pct',
+  'donate_pct', 'save_pct', 'invest_pct', 'spend_pct'
+];
 
 /**
  * Allocate budget for an invoice using a specific rule.
  * Creates BudgetAllocation rows for each category.
+ *
+ * @param {string} invoiceId
+ * @param {string} ruleId
+ * @param {number} taxAlreadyWithheld - amount of tax already withheld by payer
  */
-function allocateBudget(invoiceId, ruleId) {
+function allocateBudget(invoiceId, ruleId, taxAlreadyWithheld) {
   var invoice = findById('Invoices', invoiceId);
   if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
 
@@ -23,28 +41,39 @@ function allocateBudget(invoiceId, ruleId) {
   if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
   var total = Number(invoice.total);
-  var categories = ['tax', 'gst', 'donations', 'savings', 'investments', 'spending'];
-  var pctFields = ['tax_pct', 'gst_pct', 'donations_pct', 'savings_pct', 'investments_pct', 'spending_pct'];
+  var withheld = Number(taxAlreadyWithheld) || Number(invoice.tax_withheld) || 0;
+
+  // The net amount to allocate is total minus already-withheld tax
+  var netToAllocate = total - withheld;
 
   var allocations = [];
-  categories.forEach(function(cat, i) {
-    var pct = Number(rule[pctFields[i]]) || 0;
-    var amount = Math.round(total * pct * 100) / 100;
+  BUDGET_CATEGORIES.forEach(function(cat, i) {
+    var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
+    var amount;
+
+    if (cat === 'Tax Withheld' || cat === 'ACC Withheld') {
+      // Withheld categories: apply percentage to gross total (this is what was withheld)
+      amount = Math.round(total * pct * 100) / 100;
+    } else {
+      // All other categories: apply percentage to net amount (total - withheld)
+      amount = Math.round(netToAllocate * pct * 100) / 100;
+    }
 
     var allocation = appendRow('BudgetAllocations', {
       invoice_id: invoiceId,
       category: cat,
       percentage: pct,
       amount: amount,
-      status: 'pending',
-      transfer_date: '',
+      status: cat === 'Tax Withheld' || cat === 'ACC Withheld' ? 'transferred' : 'pending',
+      transfer_date: (cat === 'Tax Withheld' || cat === 'ACC Withheld') ? new Date().toISOString().split('T')[0] : '',
       notes: ''
     });
     allocations.push(allocation);
   });
 
-  // Update invoice with the budget rule used
+  // Update invoice with the budget rule used and withheld amount
   invoice.budget_rule_id = ruleId;
+  invoice.tax_withheld = withheld;
   updateRow('Invoices', invoice._rowIndex, invoice);
 
   return allocations;
@@ -86,7 +115,7 @@ function getBudgetSummary() {
     }
     var amount = Number(a.amount) || 0;
     summary[a.category].total += amount;
-    summary[a.category][a.status] += amount;
+    summary[a.category][a.status] = (summary[a.category][a.status] || 0) + amount;
 
     var inv = invMap[a.invoice_id] || {};
     summary[a.category].items.push({
@@ -104,14 +133,15 @@ function getBudgetSummary() {
 
 /**
  * Validate that a budget rule's percentages sum to 1.0 (100%).
+ * Note: "withheld" percentages are part of the gross split,
+ * remaining categories split the net. For validation we check
+ * that all percentages sum to 1.0.
  */
 function validateBudgetRule(rule) {
-  var sum = (Number(rule.tax_pct) || 0) +
-            (Number(rule.gst_pct) || 0) +
-            (Number(rule.donations_pct) || 0) +
-            (Number(rule.savings_pct) || 0) +
-            (Number(rule.investments_pct) || 0) +
-            (Number(rule.spending_pct) || 0);
+  var sum = 0;
+  BUDGET_PCT_FIELDS.forEach(function(field) {
+    sum += Number(rule[field]) || 0;
+  });
 
   // Allow small floating point tolerance
   if (Math.abs(sum - 1.0) > 0.001) {
