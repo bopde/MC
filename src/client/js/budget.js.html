@@ -1,0 +1,246 @@
+<script>
+/**
+ * Budget Allocations module.
+ * Categories: Tax Withheld, Tax To Pay, ACC Withheld, ACC To Pay,
+ *             Donate, Save, Invest, Spend
+ */
+
+var BUDGET_CATEGORIES_UI = [
+  'Tax Withheld', 'Tax To Pay', 'ACC Withheld', 'ACC To Pay',
+  'Donate', 'Save', 'Invest', 'Spend'
+];
+
+function renderBudgetPage(container) {
+  container.innerHTML =
+    '<div class="tab-bar" id="budget-tabs">' +
+      '<button class="active" onclick="showBudgetTab(\'summary\')">Summary</button>' +
+      '<button onclick="showBudgetTab(\'allocate\')">Allocate Invoice</button>' +
+    '</div>' +
+    '<div id="budget-tab-content"></div>';
+
+  showBudgetTab('summary');
+}
+
+function showBudgetTab(tab) {
+  var btns = document.querySelectorAll('#budget-tabs button');
+  btns.forEach(function(btn, i) {
+    btn.classList.toggle('active', (tab === 'summary' && i === 0) || (tab === 'allocate' && i === 1));
+  });
+
+  if (tab === 'summary') {
+    renderBudgetSummary();
+  } else {
+    renderBudgetAllocate();
+  }
+}
+
+// --- Budget Summary ---
+
+function renderBudgetSummary() {
+  var content = document.getElementById('budget-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading budget summary...</div>';
+
+  serverCall('getBudgetSummary').then(function(summary) {
+    if (!summary || Object.keys(summary).length === 0) {
+      content.innerHTML = '<p>No budget allocations yet. Allocate an invoice to see the breakdown.</p>';
+      return;
+    }
+
+    var grandTotal = 0;
+
+    // Summary cards
+    var html = '<div class="summary-grid">';
+    BUDGET_CATEGORIES_UI.forEach(function(cat) {
+      var data = summary[cat] || { total: 0, pending: 0, transferred: 0, reconciled: 0 };
+      grandTotal += data.total;
+      html += '<div class="summary-card">' +
+        '<h4>' + escapeHtml(cat) + '</h4>' +
+        '<div class="value">' + formatCurrency(data.total) + '</div>' +
+        '<div class="detail">' +
+          '<span class="badge badge-pending">Pending: ' + formatCurrency(data.pending) + '</span> ' +
+          '<span class="badge badge-transferred">Moved: ' + formatCurrency(data.transferred || 0) + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+
+    html += '<p><strong>Total allocated:</strong> ' + formatCurrency(grandTotal) + '</p>';
+
+    // Detailed breakdown table
+    html += '<details><summary><strong>Detailed Breakdown</strong></summary>';
+    BUDGET_CATEGORIES_UI.forEach(function(cat) {
+      var data = summary[cat];
+      if (!data || !data.items || data.items.length === 0) return;
+
+      html += '<h4 style="margin-top:1rem;">' + escapeHtml(cat) + '</h4>' +
+        '<table><thead><tr>' +
+          '<th>Invoice</th><th>Business</th><th class="number">Amount</th>' +
+          '<th>Status</th><th>Actions</th>' +
+        '</tr></thead><tbody>';
+
+      data.items.forEach(function(item) {
+        html += '<tr>' +
+          '<td>' + escapeHtml(item.invoice_id) + '</td>' +
+          '<td>' + escapeHtml(item.business_name) + '</td>' +
+          '<td class="number">' + formatCurrency(item.amount) + '</td>' +
+          '<td><span class="badge badge-' + item.status + '">' + item.status + '</span></td>' +
+          '<td class="actions">';
+
+        if (item.status === 'pending') {
+          html += '<button class="outline" onclick="markTransferred(\'' + item.allocation_id + '\')">Mark Transferred</button>';
+        } else if (item.status === 'transferred') {
+          html += '<button class="outline" onclick="markReconciled(\'' + item.allocation_id + '\')">Mark Reconciled</button>';
+        }
+
+        html += '</td></tr>';
+      });
+      html += '</tbody></table>';
+    });
+    html += '</details>';
+
+    content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function markTransferred(allocationId) {
+  serverCall('updateAllocationStatusFromClient', allocationId + '|transferred|' + todayStr()).then(function() {
+    showToast('Marked as transferred!');
+    renderBudgetSummary();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+function markReconciled(allocationId) {
+  serverCall('updateAllocationStatusFromClient', allocationId + '|reconciled|').then(function() {
+    showToast('Marked as reconciled!');
+    renderBudgetSummary();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+// --- Allocate Invoice ---
+
+function renderBudgetAllocate() {
+  var content = document.getElementById('budget-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading invoices...</div>';
+
+  serverCall('getInvoicesWithDetails').then(function(invoices) {
+    var rules = AppCache.budgetRules || [];
+
+    // Filter to only paid invoices for allocation
+    var paidInvoices = invoices.filter(function(inv) {
+      return inv.status === 'paid';
+    });
+
+    if (paidInvoices.length === 0) {
+      content.innerHTML = '<p>No paid invoices found. Mark an invoice as paid first.</p>';
+      return;
+    }
+
+    var html =
+      '<form id="allocate-form">' +
+        '<div class="form-row">' +
+          '<label>Invoice ' + buildSelect('ba-invoice', paidInvoices.map(function(inv) {
+            return {
+              id: inv.invoice_id,
+              label: inv.invoice_id + ' - ' + inv.business_name + ' (' + formatCurrency(inv.total, inv.currency) + ')'
+            };
+          }), 'id', 'label', { required: true }) + '</label>' +
+          '<label>Budget Rule ' + buildSelect('ba-rule', rules, 'rule_id', 'name', { required: true }) + '</label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Tax Already Withheld <input type="number" id="ba-withheld" step="0.01" value="0" min="0" placeholder="Amount already withheld by payer"></label>' +
+        '</div>' +
+        '<div class="form-actions">' +
+          '<button type="button" onclick="previewAllocation()">Preview Allocation</button>' +
+        '</div>' +
+      '</form>' +
+      '<div id="allocation-preview"></div>';
+
+    content.innerHTML = html;
+
+    // Auto-fill tax withheld from invoice
+    document.getElementById('ba-invoice').addEventListener('change', function() {
+      var invId = this.value;
+      var inv = paidInvoices.find(function(i) { return i.invoice_id === invId; });
+      if (inv && inv.tax_withheld) {
+        document.getElementById('ba-withheld').value = inv.tax_withheld;
+      }
+    });
+  }).catch(function(err) {
+    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function previewAllocation() {
+  var invoiceId = document.getElementById('ba-invoice').value;
+  var ruleId = document.getElementById('ba-rule').value;
+  var withheld = Number(document.getElementById('ba-withheld').value) || 0;
+
+  if (!invoiceId || !ruleId) {
+    showToast('Please select an invoice and a budget rule.', 'error');
+    return;
+  }
+
+  var rule = (AppCache.budgetRules || []).find(function(r) { return r.rule_id === ruleId; });
+  if (!rule) { showToast('Rule not found', 'error'); return; }
+
+  serverCall('getInvoiceDetails', invoiceId).then(function(data) {
+    var total = Number(data.invoice.total);
+    var netToAllocate = total - withheld;
+    var currency = (data.business && data.business.currency) || 'NZD';
+    var preview = document.getElementById('allocation-preview');
+
+    var pctFields = [
+      'tax_withheld_pct', 'tax_to_pay_pct',
+      'acc_withheld_pct', 'acc_to_pay_pct',
+      'donate_pct', 'save_pct', 'invest_pct', 'spend_pct'
+    ];
+
+    var html = '<h4>Allocation Preview for ' + escapeHtml(data.invoice.invoice_id) + '</h4>' +
+      '<p>Gross Total: ' + formatCurrency(total, currency) +
+      (withheld > 0 ? ' | Tax Withheld: ' + formatCurrency(withheld, currency) + ' | Net to Allocate: ' + formatCurrency(netToAllocate, currency) : '') +
+      ' | Rule: ' + escapeHtml(rule.name) + '</p>' +
+      '<table><thead><tr><th>Category</th><th class="number">%</th><th class="number">Amount</th><th>Note</th></tr></thead><tbody>';
+
+    var allocTotal = 0;
+    BUDGET_CATEGORIES_UI.forEach(function(cat, i) {
+      var pct = Number(rule[pctFields[i]]) || 0;
+      var isWithheld = cat === 'Tax Withheld' || cat === 'ACC Withheld';
+      var amount = isWithheld
+        ? Math.round(total * pct * 100) / 100
+        : Math.round(netToAllocate * pct * 100) / 100;
+      allocTotal += amount;
+      var note = isWithheld ? 'Applied to gross' : 'Applied to net';
+      html += '<tr><td>' + escapeHtml(cat) + '</td><td class="number">' + formatPercent(pct) + '</td>' +
+        '<td class="number">' + formatCurrency(amount, currency) + '</td>' +
+        '<td><small>' + note + '</small></td></tr>';
+    });
+
+    html += '<tr><td><strong>Total</strong></td><td></td><td class="number"><strong>' + formatCurrency(allocTotal, currency) + '</strong></td><td></td></tr>';
+    html += '</tbody></table>';
+
+    html += '<div class="form-actions">' +
+      '<button onclick="confirmAllocation()">Confirm Allocation</button>' +
+      '<button class="outline secondary" onclick="document.getElementById(\'allocation-preview\').innerHTML=\'\'">Cancel</button>' +
+      '</div>';
+
+    preview.innerHTML = html;
+  }).catch(function(err) {
+    document.getElementById('allocation-preview').innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function confirmAllocation() {
+  var invoiceId = document.getElementById('ba-invoice').value;
+  var ruleId = document.getElementById('ba-rule').value;
+  var withheld = document.getElementById('ba-withheld').value || '0';
+
+  serverCall('allocateBudgetFromClient', invoiceId + '|' + ruleId + '|' + withheld).then(function() {
+    showToast('Budget allocated successfully!');
+    showBudgetTab('summary');
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+</script>

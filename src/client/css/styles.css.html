@@ -1,0 +1,135 @@
+<style>
+  /* Layout */
+  nav ul:last-child { gap: 0; }
+  nav a { font-size: 0.9rem; }
+
+  .tab-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--pico-muted-border-color);
+    padding-bottom: 0.5rem;
+  }
+  .tab-bar button {
+    background: none;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -0.6rem;
+    color: var(--pico-muted-color);
+  }
+  .tab-bar button.active {
+    border-bottom-color: var(--pico-primary);
+    color: var(--pico-primary);
+    font-weight: 600;
+  }
+
+  /* Tables */
+  table { font-size: 0.85rem; }
+  table th { white-space: nowrap; }
+  td.actions { white-space: nowrap; }
+  td.number, th.number { text-align: right; }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge-draft { background: #fef3cd; color: #856404; }
+  .badge-sent { background: #cce5ff; color: #004085; }
+  .badge-paid { background: #d4edda; color: #155724; }
+  .badge-pending { background: #fef3cd; color: #856404; }
+  .badge-transferred { background: #cce5ff; color: #004085; }
+  .badge-reconciled { background: #d4edda; color: #155724; }
+  .badge-void { background: #e2e3e5; color: #383d41; }
+
+  /* Forms */
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+  .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .form-actions button { width: auto; }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .summary-card {
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    text-align: center;
+  }
+  .summary-card h4 {
+    margin: 0;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--pico-muted-color);
+  }
+  .summary-card .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0.25rem 0;
+  }
+  .summary-card .detail {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+  }
+
+  /* Print styles for invoices */
+  @media print {
+    nav, footer, .no-print, .tab-bar, .form-actions { display: none !important; }
+    main { padding: 0 !important; }
+    .invoice-print { border: none !important; }
+  }
+
+  /* Section spacing */
+  section { margin-bottom: 2rem; }
+  section > h2:first-child { margin-top: 0; }
+
+  /* Filters bar */
+  .filters {
+    display: flex;
+    gap: 1rem;
+    align-items: end;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--pico-card-background-color);
+    border-radius: 0.5rem;
+  }
+  .filters label { margin-bottom: 0; }
+  .filters select, .filters input { margin-bottom: 0; }
+
+  /* Toast notifications */
+  .toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+  }
+  .toast-success { background: #28a745; }
+  .toast-error { background: #dc3545; }
+
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+</style>

@@ -1,0 +1,276 @@
+<script>
+/**
+ * Hours & Expenses module.
+ * - Tab bar: Time Entries | Expenses
+ * - Forms for adding new entries
+ * - Filtered list views
+ */
+
+function renderHoursPage(container) {
+  container.innerHTML =
+    '<div class="tab-bar" id="hours-tabs">' +
+      '<button class="active" onclick="showHoursTab(\'time\')">Time Entries</button>' +
+      '<button onclick="showHoursTab(\'expenses\')">Expenses</button>' +
+    '</div>' +
+    '<div id="hours-tab-content"></div>';
+
+  showHoursTab('time');
+}
+
+function showHoursTab(tab) {
+  var btns = document.querySelectorAll('#hours-tabs button');
+  btns.forEach(function(btn, i) {
+    btn.classList.toggle('active', (tab === 'time' && i === 0) || (tab === 'expenses' && i === 1));
+  });
+
+  if (tab === 'time') {
+    renderTimeEntryTab();
+  } else {
+    renderExpenseTab();
+  }
+}
+
+function renderTimeEntryTab() {
+  var businesses = AppCache.businesses || [];
+  var codes = AppCache.workCodes || [];
+  var content = document.getElementById('hours-tab-content');
+
+  content.innerHTML =
+    '<details open><summary><strong>Add Time Entry</strong></summary>' +
+    '<form id="time-entry-form" onsubmit="submitTimeEntry(event)">' +
+      '<div class="form-row">' +
+        '<label>Business ' + buildSelect('te-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
+        '<label>Date <input type="date" id="te-date" required value="' + todayStr() + '"></label>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label>Start Time <input type="time" id="te-start" required></label>' +
+        '<label>End Time <input type="time" id="te-end" required></label>' +
+        '<label>Work Code ' + buildCodeSelect('te-code', codes, { required: true }) + '</label>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label>Rate (per hr) <input type="number" id="te-rate" step="0.01" required></label>' +
+        '<label>Description <input type="text" id="te-desc" placeholder="What did you work on?"></label>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button type="submit">Add Entry</button>' +
+      '</div>' +
+    '</form></details>' +
+
+    '<section>' +
+      '<h3>Recent Entries</h3>' +
+      '<div class="filters no-print">' +
+        '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All' }) + '</label>' +
+        '<label>From <input type="date" id="te-filter-from"></label>' +
+        '<label>To <input type="date" id="te-filter-to"></label>' +
+        '<button onclick="filterTimeEntries()">Filter</button>' +
+      '</div>' +
+      '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
+    '</section>';
+
+  // Auto-fill rate when business is selected
+  document.getElementById('te-business').addEventListener('change', function() {
+    var bizId = this.value;
+    var biz = businesses.find(function(b) { return b.business_id === bizId; });
+    if (biz && biz.default_rate) {
+      document.getElementById('te-rate').value = biz.default_rate;
+    }
+  });
+
+  filterTimeEntries();
+}
+
+function filterTimeEntries() {
+  var filters = {
+    business_id: document.getElementById('te-filter-biz').value || undefined,
+    dateFrom: document.getElementById('te-filter-from').value || undefined,
+    dateTo: document.getElementById('te-filter-to').value || undefined
+  };
+
+  serverCall('getTimeEntries', filters).then(function(entries) {
+    renderTimeEntriesTable(entries);
+  }).catch(function(err) {
+    document.getElementById('time-entries-list').innerHTML =
+      '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function renderTimeEntriesTable(entries) {
+  var el = document.getElementById('time-entries-list');
+  if (!entries || entries.length === 0) {
+    el.innerHTML = '<p>No time entries found.</p>';
+    return;
+  }
+
+  // Sort by date descending
+  entries.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+
+  var totalHours = entries.reduce(function(s, e) { return s + (Number(e.hours) || 0); }, 0);
+  var totalAmount = entries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0);
+
+  var html = '<table><thead><tr>' +
+    '<th>Date</th><th>Business</th><th>Code</th><th>Start</th><th>End</th>' +
+    '<th class="number">Hours</th><th>Description</th><th class="number">Rate</th>' +
+    '<th class="number">Total</th><th>Invoiced</th>' +
+    '</tr></thead><tbody>';
+
+  entries.forEach(function(e) {
+    var bizName = '';
+    var currency = 'NZD';
+    if (AppCache.businesses) {
+      var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
+      if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
+    }
+    html += '<tr>' +
+      '<td>' + formatDate(e.date) + '</td>' +
+      '<td>' + escapeHtml(bizName) + '</td>' +
+      '<td>' + escapeHtml(e.work_code) + '</td>' +
+      '<td>' + escapeHtml(e.time_start) + '</td>' +
+      '<td>' + escapeHtml(e.time_end) + '</td>' +
+      '<td class="number">' + (Number(e.hours) || 0).toFixed(2) + '</td>' +
+      '<td>' + escapeHtml(e.description) + '</td>' +
+      '<td class="number">' + formatCurrency(e.rate, currency) + '</td>' +
+      '<td class="number">' + formatCurrency(e.line_total, currency) + '</td>' +
+      '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody><tfoot><tr>' +
+    '<td colspan="5"><strong>Totals</strong></td>' +
+    '<td class="number"><strong>' + totalHours.toFixed(2) + '</strong></td>' +
+    '<td colspan="2"></td>' +
+    '<td class="number"><strong>' + formatCurrency(totalAmount) + '</strong></td>' +
+    '<td></td></tr></tfoot></table>';
+
+  el.innerHTML = html;
+}
+
+function submitTimeEntry(event) {
+  event.preventDefault();
+  var data = {
+    business_id: document.getElementById('te-business').value,
+    date: document.getElementById('te-date').value,
+    time_start: document.getElementById('te-start').value,
+    time_end: document.getElementById('te-end').value,
+    work_code: document.getElementById('te-code').value,
+    rate: document.getElementById('te-rate').value,
+    description: document.getElementById('te-desc').value
+  };
+
+  var btn = event.target.querySelector('button[type="submit"]');
+  btn.setAttribute('aria-busy', 'true');
+
+  serverCall('addTimeEntry', data).then(function() {
+    showToast('Time entry added!');
+    // Reset time fields but keep date/business/rate
+    document.getElementById('te-start').value = '';
+    document.getElementById('te-end').value = '';
+    document.getElementById('te-desc').value = '';
+    filterTimeEntries();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  }).finally(function() {
+    btn.removeAttribute('aria-busy');
+  });
+}
+
+// --- Expenses Tab ---
+
+function renderExpenseTab() {
+  var businesses = AppCache.businesses || [];
+  var codes = AppCache.workCodes || [];
+  var content = document.getElementById('hours-tab-content');
+
+  content.innerHTML =
+    '<details open><summary><strong>Add Expense</strong></summary>' +
+    '<form id="expense-form" onsubmit="submitExpense(event)">' +
+      '<div class="form-row">' +
+        '<label>Business ' + buildSelect('exp-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
+        '<label>Date <input type="date" id="exp-date" required value="' + todayStr() + '"></label>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label>Amount <input type="number" id="exp-amount" step="0.01" required></label>' +
+        '<label>For <input type="text" id="exp-desc" placeholder="What was this expense for?" required></label>' +
+        '<label>Work Code ' + buildCodeSelect('exp-code', codes, { required: true }) + '</label>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button type="submit">Add Expense</button>' +
+      '</div>' +
+    '</form></details>' +
+
+    '<section>' +
+      '<h3>Recent Expenses</h3>' +
+      '<div id="expenses-list" aria-busy="true">Loading...</div>' +
+    '</section>';
+
+  loadExpenses();
+}
+
+function loadExpenses() {
+  serverCall('getExpenses', {}).then(function(expenses) {
+    var el = document.getElementById('expenses-list');
+    if (!expenses || expenses.length === 0) {
+      el.innerHTML = '<p>No expenses found.</p>';
+      return;
+    }
+
+    expenses.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+    var total = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+
+    var html = '<table><thead><tr>' +
+      '<th>Date</th><th>Business</th><th>Code</th><th>For</th>' +
+      '<th class="number">Amount</th><th>Invoiced</th>' +
+      '</tr></thead><tbody>';
+
+    expenses.forEach(function(e) {
+      var bizName = '';
+      var currency = 'NZD';
+      if (AppCache.businesses) {
+        var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
+        if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
+      }
+      html += '<tr>' +
+        '<td>' + formatDate(e.date) + '</td>' +
+        '<td>' + escapeHtml(bizName) + '</td>' +
+        '<td>' + escapeHtml(e.work_code) + '</td>' +
+        '<td>' + escapeHtml(e.description) + '</td>' +
+        '<td class="number">' + formatCurrency(e.amount, currency) + '</td>' +
+        '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
+        '</tr>';
+    });
+
+    html += '</tbody><tfoot><tr><td colspan="4"><strong>Total</strong></td>' +
+      '<td class="number"><strong>' + formatCurrency(total) + '</strong></td>' +
+      '<td></td></tr></tfoot></table>';
+
+    el.innerHTML = html;
+  }).catch(function(err) {
+    document.getElementById('expenses-list').innerHTML =
+      '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function submitExpense(event) {
+  event.preventDefault();
+  var data = {
+    business_id: document.getElementById('exp-business').value,
+    date: document.getElementById('exp-date').value,
+    amount: document.getElementById('exp-amount').value,
+    description: document.getElementById('exp-desc').value,
+    work_code: document.getElementById('exp-code').value
+  };
+
+  var btn = event.target.querySelector('button[type="submit"]');
+  btn.setAttribute('aria-busy', 'true');
+
+  serverCall('addExpense', data).then(function() {
+    showToast('Expense added!');
+    document.getElementById('exp-amount').value = '';
+    document.getElementById('exp-desc').value = '';
+    loadExpenses();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  }).finally(function() {
+    btn.removeAttribute('aria-busy');
+  });
+}
+</script>

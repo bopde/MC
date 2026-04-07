@@ -1,0 +1,65 @@
+<script>
+/**
+ * Main application: hash-based router and page initialization.
+ */
+
+var App = {
+  currentPage: null,
+
+  pages: {
+    hours: { title: 'Hours & Expenses', render: renderHoursPage },
+    invoices: { title: 'Invoices', render: renderInvoicesPage },
+    budget: { title: 'Budget Allocations', render: renderBudgetPage },
+    accounts: { title: 'Account Summaries', render: renderAccountsPage },
+    settings: { title: 'Settings', render: renderSettingsPage }
+  },
+
+  init: function() {
+    window.addEventListener('hashchange', App.route);
+    App.route();
+  },
+
+  route: function() {
+    var hash = window.location.hash.replace('#', '') || 'hours';
+    var page = App.pages[hash];
+
+    if (!page) {
+      window.location.hash = '#hours';
+      return;
+    }
+
+    App.currentPage = hash;
+
+    // Update active nav link
+    document.querySelectorAll('.nav-link').forEach(function(link) {
+      link.classList.toggle('active', link.dataset.page === hash);
+    });
+
+    // Show loading, load reference data, then render
+    var content = document.getElementById('app-content');
+    var loading = document.getElementById('loading');
+    content.style.display = 'none';
+    loading.style.display = 'block';
+
+    loadReferenceData().then(function() {
+      content.innerHTML = '<h2>' + page.title + '</h2><div id="page-content"></div>';
+      content.style.display = 'block';
+      loading.style.display = 'none';
+      page.render(document.getElementById('page-content'));
+    }).catch(function(err) {
+      content.innerHTML = '<article><p>Error loading data: ' + escapeHtml(err.message) + '</p>' +
+                          '<p>Make sure you have run the setup. See the README for instructions.</p></article>';
+      content.style.display = 'block';
+      loading.style.display = 'none';
+    });
+  },
+
+  refresh: function() {
+    AppCache.clear();
+    App.route();
+  }
+};
+
+// Start the app
+document.addEventListener('DOMContentLoaded', App.init);
+</script>

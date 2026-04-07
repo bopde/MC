@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Tracker</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <?!= include('client/css/styles.css') ?>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>Finance Tracker</strong></li>
+    </ul>
+    <ul>
+      <li><a href="#hours" class="nav-link" data-page="hours">Hours</a></li>
+      <li><a href="#invoices" class="nav-link" data-page="invoices">Invoices</a></li>
+      <li><a href="#budget" class="nav-link" data-page="budget">Budget</a></li>
+      <li><a href="#accounts" class="nav-link" data-page="accounts">Accounts</a></li>
+      <li><a href="#settings" class="nav-link" data-page="settings">Settings</a></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <div id="loading" aria-busy="true" style="text-align:center;padding:2rem;">Loading...</div>
+    <div id="app-content" style="display:none;"></div>
+  </main>
+
+  <footer class="container">
+    <small>Finance Tracker &mdash; Data stored in Google Sheets. No data leaves your Google account.</small>
+  </footer>
+
+  <?!= include('client/js/utils.js') ?>
+  <?!= include('client/js/app.js') ?>
+  <?!= include('client/js/hours.js') ?>
+  <?!= include('client/js/invoices.js') ?>
+  <?!= include('client/js/budget.js') ?>
+  <?!= include('client/js/accounts.js') ?>
+  <?!= include('client/js/settings.js') ?>
+</body>
+</html>

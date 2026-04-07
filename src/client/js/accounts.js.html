@@ -1,0 +1,213 @@
+<script>
+/**
+ * Account Summaries module.
+ * - Monthly account balance entry
+ * - Year overview with all accounts (15-month periods)
+ */
+
+function renderAccountsPage(container) {
+  container.innerHTML =
+    '<div class="tab-bar" id="account-tabs">' +
+      '<button class="active" onclick="showAccountTab(\'monthly\')">Monthly Entry</button>' +
+      '<button onclick="showAccountTab(\'overview\')">Year Overview</button>' +
+    '</div>' +
+    '<div id="account-tab-content"></div>';
+
+  showAccountTab('monthly');
+}
+
+function showAccountTab(tab) {
+  var btns = document.querySelectorAll('#account-tabs button');
+  btns.forEach(function(btn, i) {
+    btn.classList.toggle('active', (tab === 'monthly' && i === 0) || (tab === 'overview' && i === 1));
+  });
+
+  if (tab === 'monthly') {
+    renderMonthlySummary();
+  } else {
+    renderYearOverview();
+  }
+}
+
+// --- Monthly Summary Entry ---
+
+function renderMonthlySummary() {
+  var content = document.getElementById('account-tab-content');
+
+  content.innerHTML =
+    '<div class="form-row" style="margin-bottom:1rem;">' +
+      '<label>Month <input type="month" id="as-month" value="' + currentMonth() + '"></label>' +
+      '<label style="align-self:end;"><button onclick="loadMonthlySummaries()">Load</button></label>' +
+    '</div>' +
+    '<div id="monthly-summaries">Click "Load" to see accounts for this month.</div>';
+
+  loadMonthlySummaries();
+}
+
+function loadMonthlySummaries() {
+  var month = document.getElementById('as-month').value;
+  if (!month) return;
+
+  var el = document.getElementById('monthly-summaries');
+  el.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  Promise.all([
+    serverCall('getAccountSummariesForMonth', month),
+    serverCall('getAccounts')
+  ]).then(function(results) {
+    var summaries = results[0];
+    var accounts = results[1];
+
+    // Build a map of existing summaries
+    var summaryMap = {};
+    summaries.forEach(function(s) { summaryMap[s.account_id] = s; });
+
+    if (accounts.length === 0) {
+      el.innerHTML = '<p>No accounts configured. Go to Settings to add accounts.</p>';
+      return;
+    }
+
+    var html = '<form id="monthly-form" onsubmit="saveMonthlySummaries(event)">' +
+      '<table><thead><tr>' +
+        '<th>Account</th><th>Type</th><th>Currency</th><th class="number">Ending Balance</th>' +
+        '<th class="number">Realised Gains</th><th class="number">Unrealised Gains</th>' +
+        '<th class="number">Tax Paid</th><th>Notes</th>' +
+      '</tr></thead><tbody>';
+
+    accounts.forEach(function(acc) {
+      var s = summaryMap[acc.account_id] || {};
+      html += '<tr data-account-id="' + acc.account_id + '">' +
+        '<td><strong>' + escapeHtml(acc.name) + '</strong></td>' +
+        '<td>' + escapeHtml(acc.type) + '</td>' +
+        '<td>' + escapeHtml(acc.currency || 'NZD') + '</td>' +
+        '<td><input type="number" step="0.01" class="as-balance" value="' + (s.ending_balance || '') + '"></td>' +
+        '<td><input type="number" step="0.01" class="as-realised" value="' + (s.realised_gains || '') + '"></td>' +
+        '<td><input type="number" step="0.01" class="as-unrealised" value="' + (s.unrealised_gains || '') + '"></td>' +
+        '<td><input type="number" step="0.01" class="as-tax" value="' + (s.tax_paid || '') + '"></td>' +
+        '<td><input type="text" class="as-notes" value="' + escapeHtml(s.notes || '') + '"></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>' +
+      '<div class="form-actions"><button type="submit">Save All</button></div></form>';
+
+    el.innerHTML = html;
+  }).catch(function(err) {
+    el.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function saveMonthlySummaries(event) {
+  event.preventDefault();
+  var month = document.getElementById('as-month').value;
+  var rows = document.querySelectorAll('#monthly-form tbody tr');
+  var promises = [];
+
+  rows.forEach(function(row) {
+    var data = {
+      account_id: row.dataset.accountId,
+      month: month,
+      ending_balance: row.querySelector('.as-balance').value || 0,
+      realised_gains: row.querySelector('.as-realised').value || 0,
+      unrealised_gains: row.querySelector('.as-unrealised').value || 0,
+      tax_paid: row.querySelector('.as-tax').value || 0,
+      notes: row.querySelector('.as-notes').value || ''
+    };
+    promises.push(serverCall('saveAccountSummary', data));
+  });
+
+  Promise.all(promises).then(function() {
+    showToast('Account summaries saved!');
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+
+// --- Year Overview ---
+
+function renderYearOverview() {
+  var content = document.getElementById('account-tab-content');
+  var year = new Date().getFullYear().toString();
+
+  content.innerHTML =
+    '<div class="form-row" style="margin-bottom:1rem;">' +
+      '<label>Year <input type="number" id="ao-year" value="' + year + '" min="2020" max="2099"></label>' +
+      '<label style="align-self:end;"><button onclick="loadYearOverview()">Load</button></label>' +
+    '</div>' +
+    '<div id="year-overview"></div>';
+
+  loadYearOverview();
+}
+
+function loadYearOverview() {
+  var year = document.getElementById('ao-year').value;
+  var el = document.getElementById('year-overview');
+  el.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  serverCall('getYearOverview', year).then(function(data) {
+    var accounts = data.accounts;
+    var summaries = data.summaries;
+
+    if (accounts.length === 0) {
+      el.innerHTML = '<p>No accounts configured.</p>';
+      return;
+    }
+
+    // Build months array: Jan of year through Mar of next year (15 months)
+    var months = [];
+    for (var m = 1; m <= 12; m++) {
+      months.push(year + '-' + String(m).padStart(2, '0'));
+    }
+    var nextYear = (parseInt(year) + 1).toString();
+    for (var m2 = 1; m2 <= 3; m2++) {
+      months.push(nextYear + '-' + String(m2).padStart(2, '0'));
+    }
+
+    // Index summaries by account_id|month
+    var sMap = {};
+    summaries.forEach(function(s) {
+      sMap[s.account_id + '|' + s.month] = s;
+    });
+
+    var html = '<div style="overflow-x:auto;">';
+
+    accounts.forEach(function(acc) {
+      var accCurrency = acc.currency || 'NZD';
+      html += '<h4>' + escapeHtml(acc.name) + ' <small>(' + escapeHtml(acc.type) + ' / ' + escapeHtml(accCurrency) + ')</small></h4>' +
+        '<table><thead><tr><th>Month</th><th class="number">Balance</th>' +
+        '<th class="number">Realised</th><th class="number">Unrealised</th>' +
+        '<th class="number">Tax Paid</th><th>Notes</th></tr></thead><tbody>';
+
+      var prevBalance = null;
+      months.forEach(function(month) {
+        var s = sMap[acc.account_id + '|' + month];
+        var balance = s ? Number(s.ending_balance) : null;
+        var change = '';
+        if (prevBalance !== null && balance !== null) {
+          var diff = balance - prevBalance;
+          change = ' <small style="color:' + (diff >= 0 ? 'green' : 'red') + ';">' +
+            (diff >= 0 ? '+' : '') + formatCurrency(diff, accCurrency) + '</small>';
+        }
+
+        html += '<tr>' +
+          '<td>' + month + '</td>' +
+          '<td class="number">' + (balance !== null ? formatCurrency(balance, accCurrency) + change : '-') + '</td>' +
+          '<td class="number">' + (s ? formatCurrency(s.realised_gains, accCurrency) : '-') + '</td>' +
+          '<td class="number">' + (s ? formatCurrency(s.unrealised_gains, accCurrency) : '-') + '</td>' +
+          '<td class="number">' + (s ? formatCurrency(s.tax_paid, accCurrency) : '-') + '</td>' +
+          '<td>' + (s ? escapeHtml(s.notes) : '') + '</td>' +
+          '</tr>';
+
+        if (balance !== null) prevBalance = balance;
+      });
+
+      html += '</tbody></table>';
+    });
+
+    html += '</div>';
+    el.innerHTML = html;
+  }).catch(function(err) {
+    el.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+</script>
