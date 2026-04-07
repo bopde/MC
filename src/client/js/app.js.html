@@ -41,12 +41,15 @@ var App = {
     content.style.display = 'none';
     loading.style.display = 'block';
 
+    console.log('[App.route] Loading page: ' + hash);
     loadReferenceData().then(function() {
+      console.log('[App.route] Rendering page: ' + hash);
       content.innerHTML = '<h2>' + page.title + '</h2><div id="page-content"></div>';
       content.style.display = 'block';
       loading.style.display = 'none';
       page.render(document.getElementById('page-content'));
     }).catch(function(err) {
+      console.error('[App.route] Error loading data:', err);
       content.innerHTML = '<article><p>Error loading data: ' + escapeHtml(err.message) + '</p>' +
                           '<p>Make sure you have run the setup. See the README for instructions.</p></article>';
       content.style.display = 'block';
