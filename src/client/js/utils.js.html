@@ -22,16 +22,40 @@ var AppCache = {
 
 /**
  * Wrapper around google.script.run for cleaner async calls.
- * Returns a Promise.
+ * Returns a Promise with a timeout to prevent hanging.
  */
 function serverCall(functionName, args) {
+  var TIMEOUT_MS = 15000; // 15 seconds
+
   return new Promise(function(resolve, reject) {
+    var settled = false;
+    var timer = setTimeout(function() {
+      if (!settled) {
+        settled = true;
+        console.error('[serverCall] TIMEOUT after ' + TIMEOUT_MS + 'ms: ' + functionName);
+        reject(new Error('Server call "' + functionName + '" timed out after ' + (TIMEOUT_MS / 1000) + 's'));
+      }
+    }, TIMEOUT_MS);
+
     var runner = google.script.run
-      .withSuccessHandler(resolve)
+      .withSuccessHandler(function(result) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          console.log('[serverCall] OK: ' + functionName);
+          resolve(result);
+        }
+      })
       .withFailureHandler(function(err) {
-        reject(new Error(err.message || err));
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          console.error('[serverCall] FAIL: ' + functionName, err);
+          reject(new Error(err.message || err));
+        }
       });
 
+    console.log('[serverCall] Calling: ' + functionName);
     if (args !== undefined) {
       runner[functionName](args);
     } else {
@@ -117,25 +141,31 @@ function escapeHtml(str) {
 
 /**
  * Load reference data into cache. Returns a promise.
+ * Each call is wrapped so a single failure won't block everything.
  */
 function loadReferenceData() {
+  console.log('[loadReferenceData] Starting...');
+
+  function safeLoad(name, serverFn, fallback) {
+    return serverCall(serverFn).then(function(data) {
+      AppCache[name] = data;
+      console.log('[loadReferenceData] Loaded ' + name + ':', (data || []).length || 'ok');
+    }).catch(function(err) {
+      console.warn('[loadReferenceData] Failed to load ' + name + ', using fallback:', err.message);
+      AppCache[name] = fallback;
+    });
+  }
+
   var promises = [];
-  if (!AppCache.businesses) {
-    promises.push(serverCall('getBusinesses').then(function(data) { AppCache.businesses = data; }));
-  }
-  if (!AppCache.workCodes) {
-    promises.push(serverCall('getWorkCodes').then(function(data) { AppCache.workCodes = data; }));
-  }
-  if (!AppCache.accounts) {
-    promises.push(serverCall('getAccounts').then(function(data) { AppCache.accounts = data; }));
-  }
-  if (!AppCache.budgetRules) {
-    promises.push(serverCall('getBudgetRules').then(function(data) { AppCache.budgetRules = data; }));
-  }
-  if (!AppCache.myDetails) {
-    promises.push(serverCall('getMyDetails').then(function(data) { AppCache.myDetails = data; }));
-  }
-  return Promise.all(promises);
+  if (!AppCache.businesses) promises.push(safeLoad('businesses', 'getBusinesses', []));
+  if (!AppCache.workCodes) promises.push(safeLoad('workCodes', 'getWorkCodes', []));
+  if (!AppCache.accounts) promises.push(safeLoad('accounts', 'getAccounts', []));
+  if (!AppCache.budgetRules) promises.push(safeLoad('budgetRules', 'getBudgetRules', []));
+  if (!AppCache.myDetails) promises.push(safeLoad('myDetails', 'getMyDetails', {}));
+
+  return Promise.all(promises).then(function() {
+    console.log('[loadReferenceData] All done.');
+  });
 }
 
 /**
