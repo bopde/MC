@@ -113,12 +113,17 @@ function getDefaultBudgetRule() {
 // --- My Details (Invoice From) ---
 
 function getMyDetails() {
-  var rows = getAll('MyDetails');
-  var details = {};
-  rows.forEach(function(r) {
-    details[r.key] = r.value;
-  });
-  return details;
+  try {
+    var rows = getAll('MyDetails');
+    var details = {};
+    rows.forEach(function(r) {
+      details[r.key] = r.value;
+    });
+    return details;
+  } catch (e) {
+    // MyDetails sheet may not exist yet — return empty
+    return {};
+  }
 }
 
 function saveMyDetails(data) {

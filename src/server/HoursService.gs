@@ -53,6 +53,7 @@ function addExpense(data) {
  * Get time entries filtered by business and/or date range.
  */
 function getTimeEntries(filters) {
+  filters = filters || {};
   var entries = getAll('TimeEntries');
 
   if (filters.business_id) {
@@ -78,6 +79,7 @@ function getTimeEntries(filters) {
  * Get expenses filtered by business and/or date range.
  */
 function getExpenses(filters) {
+  filters = filters || {};
   var expenses = getAll('Expenses');
 
   if (filters.business_id) {
