@@ -2,27 +2,14 @@
  * One-time setup: creates all required sheets with headers.
  * Run this function once after creating a new Google Spreadsheet.
  *
- * Before running, set the spreadsheet ID:
- *   1. Open your Google Spreadsheet
- *   2. Copy the ID from the URL (between /d/ and /edit)
- *   3. Run setSpreadsheetId('YOUR_ID') from the Apps Script editor
+ * This script is designed to be CONTAINER-BOUND: create it from within
+ * your spreadsheet via Extensions > Apps Script. This way it only needs
+ * permission to access that one spreadsheet (spreadsheets.currentonly),
+ * not all your spreadsheets.
  */
 
-function setSpreadsheetId(id) {
-  PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', id);
-  Logger.log('Spreadsheet ID set to: ' + id);
-}
-
-function getSpreadsheetId() {
-  var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-  if (!id) {
-    throw new Error('Spreadsheet ID not configured. Run setSpreadsheetId() first.');
-  }
-  return id;
-}
-
 function getSpreadsheet() {
-  return SpreadsheetApp.openById(getSpreadsheetId());
+  return SpreadsheetApp.getActiveSpreadsheet();
 }
 
 /**
