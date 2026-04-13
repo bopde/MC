@@ -4,6 +4,10 @@
  *
  * Categories: Tax Withheld, Tax To Pay, ACC Withheld, ACC To Pay,
  *             Donate, Save, Invest, Spend
+ *
+ * Status model (simplified): 'allocated' -> 'paid'
+ *   - 'allocated': money is earmarked but not yet moved
+ *   - 'paid': money has been moved (or auto-paid for Withheld categories)
  */
 
 var BUDGET_CATEGORIES = [
@@ -17,84 +21,110 @@ var BUDGET_PCT_FIELDS = [
   'donate_pct', 'save_pct', 'invest_pct', 'spend_pct'
 ];
 
+var WITHHELD_CATEGORIES = ['Tax Withheld', 'ACC Withheld'];
+
 /**
  * Allocate budget for an invoice using a specific rule.
  * Creates BudgetAllocation rows for each category.
  *
  * @param {string} invoiceId
  * @param {string} ruleId
- * @param {number} taxAlreadyWithheld - amount of tax already withheld by payer
+ * @param {number} taxAlreadyWithheld - amount of tax already withheld by the payer
  */
 function allocateBudget(invoiceId, ruleId, taxAlreadyWithheld) {
   var invoice = findById('Invoices', invoiceId);
   if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
 
-  // Check for existing allocations
   var existing = getAll('BudgetAllocations').filter(function(a) {
     return a.invoice_id === invoiceId;
   });
   if (existing.length > 0) {
-    throw new Error('Budget already allocated for this invoice. Delete existing allocations first.');
+    throw new Error('Budget already allocated for this invoice.');
   }
 
   var rule = findById('BudgetRules', ruleId);
   if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
-  var total = Number(invoice.total);
-  var withheld = Number(taxAlreadyWithheld) || Number(invoice.tax_withheld) || 0;
-
-  // The net amount to allocate is total minus already-withheld tax
+  var total = Number(invoice.total) || 0;
+  var withheld = Number(taxAlreadyWithheld) || 0;
   var netToAllocate = total - withheld;
+  var today = new Date().toISOString().split('T')[0];
 
   var allocations = [];
   BUDGET_CATEGORIES.forEach(function(cat, i) {
     var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
-    var amount;
-
-    if (cat === 'Tax Withheld' || cat === 'ACC Withheld') {
-      // Withheld categories: apply percentage to gross total (this is what was withheld)
-      amount = Math.round(total * pct * 100) / 100;
-    } else {
-      // All other categories: apply percentage to net amount (total - withheld)
-      amount = Math.round(netToAllocate * pct * 100) / 100;
-    }
+    var isWithheld = WITHHELD_CATEGORIES.indexOf(cat) !== -1;
+    var amount = isWithheld
+      ? Math.round(total * pct * 100) / 100
+      : Math.round(netToAllocate * pct * 100) / 100;
 
     var allocation = appendRow('BudgetAllocations', {
       invoice_id: invoiceId,
       category: cat,
       percentage: pct,
       amount: amount,
-      status: cat === 'Tax Withheld' || cat === 'ACC Withheld' ? 'transferred' : 'pending',
-      transfer_date: (cat === 'Tax Withheld' || cat === 'ACC Withheld') ? new Date().toISOString().split('T')[0] : '',
-      notes: ''
+      status: isWithheld ? 'paid' : 'allocated',
+      transfer_date: isWithheld ? today : '',
+      notes: isWithheld ? 'Auto-paid (withheld by payer)' : ''
     });
     allocations.push(allocation);
   });
 
-  // Update invoice with the budget rule used and withheld amount
   invoice.budget_rule_id = ruleId;
-  invoice.tax_withheld = withheld;
   updateRow('Invoices', invoice._rowIndex, invoice);
 
   return allocations;
 }
 
 /**
- * Update allocation status (pending -> transferred -> reconciled).
+ * Toggle allocation status between 'allocated' and 'paid'.
+ * Simplified model: only two states.
  */
 function updateAllocationStatus(allocationId, newStatus, transferDate) {
+  var validStatuses = ['allocated', 'paid'];
+  if (validStatuses.indexOf(newStatus) === -1) {
+    throw new Error('Invalid allocation status: ' + newStatus);
+  }
+
   var allocs = getAll('BudgetAllocations');
   var alloc = allocs.find(function(a) { return a.allocation_id === allocationId; });
   if (!alloc) throw new Error('Allocation not found: ' + allocationId);
 
   alloc.status = newStatus;
-  if (transferDate) alloc.transfer_date = transferDate;
+  if (newStatus === 'paid') {
+    alloc.transfer_date = transferDate || new Date().toISOString().split('T')[0];
+  } else {
+    alloc.transfer_date = '';
+  }
   updateRow('BudgetAllocations', alloc._rowIndex, alloc);
   return alloc;
 }
 
 /**
- * Get budget summary across all invoices: how much is allocated to each category.
+ * Normalise legacy status values into the two-state model.
+ * Old values: pending -> allocated; transferred/reconciled -> paid.
+ */
+function normaliseAllocationStatus(status) {
+  if (status === 'paid' || status === 'transferred' || status === 'reconciled') return 'paid';
+  return 'allocated';
+}
+
+/**
+ * Get budget summary across all invoices.
+ *
+ * Returns:
+ *   {
+ *     categories: [
+ *       {
+ *         category, allocated, paid, outstanding,
+ *         isWithheld, items: [{allocation_id, invoice_id, business_name, amount, status, transfer_date}]
+ *       },
+ *       ...
+ *     ],
+ *     totals: { allocated, paid, outstanding,
+ *               taxWithheld, taxToPay, taxPaidTotal, taxOutstanding,
+ *               accWithheld, accToPay }
+ *   }
  */
 function getBudgetSummary() {
   var allocations = getAll('BudgetAllocations');
@@ -107,35 +137,70 @@ function getBudgetSummary() {
   var invMap = {};
   invoices.forEach(function(inv) { invMap[inv.invoice_id] = inv; });
 
-  // Group by category
-  var summary = {};
-  allocations.forEach(function(a) {
-    if (!summary[a.category]) {
-      summary[a.category] = { total: 0, pending: 0, transferred: 0, reconciled: 0, items: [] };
-    }
-    var amount = Number(a.amount) || 0;
-    summary[a.category].total += amount;
-    summary[a.category][a.status] = (summary[a.category][a.status] || 0) + amount;
+  var byCat = {};
+  BUDGET_CATEGORIES.forEach(function(cat) {
+    byCat[cat] = {
+      category: cat,
+      isWithheld: WITHHELD_CATEGORIES.indexOf(cat) !== -1,
+      allocated: 0,
+      paid: 0,
+      outstanding: 0,
+      items: []
+    };
+  });
 
+  allocations.forEach(function(a) {
+    var cat = a.category;
+    if (!byCat[cat]) return;
+
+    var amount = Number(a.amount) || 0;
+    var status = normaliseAllocationStatus(a.status);
     var inv = invMap[a.invoice_id] || {};
-    summary[a.category].items.push({
+
+    byCat[cat].allocated += amount;
+    if (status === 'paid') {
+      byCat[cat].paid += amount;
+    } else {
+      byCat[cat].outstanding += amount;
+    }
+
+    byCat[cat].items.push({
       allocation_id: a.allocation_id,
       invoice_id: a.invoice_id,
       business_name: bizMap[inv.business_id] || 'Unknown',
       amount: amount,
-      status: a.status,
-      transfer_date: a.transfer_date
+      status: status,
+      transfer_date: a.transfer_date || '',
+      notes: a.notes || ''
     });
   });
 
-  return summary;
+  // Build ordered array
+  var categories = BUDGET_CATEGORIES.map(function(c) { return byCat[c]; });
+
+  // Roll-up totals
+  var totals = {
+    allocated: 0, paid: 0, outstanding: 0,
+    taxWithheld: byCat['Tax Withheld'].paid,
+    taxToPayAllocated: byCat['Tax To Pay'].allocated,
+    taxToPayPaid: byCat['Tax To Pay'].paid,
+    taxToPayOutstanding: byCat['Tax To Pay'].outstanding,
+    accWithheld: byCat['ACC Withheld'].paid,
+    accToPayAllocated: byCat['ACC To Pay'].allocated,
+    accToPayPaid: byCat['ACC To Pay'].paid,
+    accToPayOutstanding: byCat['ACC To Pay'].outstanding
+  };
+  categories.forEach(function(c) {
+    totals.allocated += c.allocated;
+    totals.paid += c.paid;
+    totals.outstanding += c.outstanding;
+  });
+
+  return { categories: categories, totals: totals };
 }
 
 /**
  * Validate that a budget rule's percentages sum to 1.0 (100%).
- * Note: "withheld" percentages are part of the gross split,
- * remaining categories split the net. For validation we check
- * that all percentages sum to 1.0.
  */
 function validateBudgetRule(rule) {
   var sum = 0;
@@ -143,7 +208,6 @@ function validateBudgetRule(rule) {
     sum += Number(rule[field]) || 0;
   });
 
-  // Allow small floating point tolerance
   if (Math.abs(sum - 1.0) > 0.001) {
     throw new Error('Budget rule percentages must sum to 100%. Current sum: ' + (sum * 100).toFixed(1) + '%');
   }

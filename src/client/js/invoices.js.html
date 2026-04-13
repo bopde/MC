@@ -3,6 +3,7 @@
  * Invoices module.
  * - Create invoices from uninvoiced time entries and expenses
  * - View invoice list with status management
+ * - Edit invoice metadata (description, notes, GST)
  * - Print-friendly invoice view with "From" details
  */
 
@@ -22,12 +23,8 @@ function showInvoiceTab(tab) {
   btns.forEach(function(btn, i) {
     btn.classList.toggle('active', (tab === 'list' && i === 0) || (tab === 'create' && i === 1));
   });
-
-  if (tab === 'list') {
-    renderInvoiceList();
-  } else {
-    renderCreateInvoice();
-  }
+  if (tab === 'list') renderInvoiceList();
+  else renderCreateInvoice();
 }
 
 // --- Invoice List ---
@@ -38,13 +35,13 @@ function renderInvoiceList() {
 
   serverCall('getInvoicesWithDetails').then(function(invoices) {
     if (!invoices || invoices.length === 0) {
-      content.innerHTML = '<p>No invoices yet. Create one from the "Create Invoice" tab.</p>';
+      content.innerHTML = '<p class="muted">No invoices yet. Create one from the "Create Invoice" tab.</p>';
       return;
     }
 
     invoices.sort(function(a, b) { return new Date(b.created_date) - new Date(a.created_date); });
 
-    var html = '<table><thead><tr>' +
+    var html = '<table class="data-table"><thead><tr>' +
       '<th>Invoice #</th><th>Business</th><th>Period</th><th>Created</th>' +
       '<th class="number">Subtotal</th><th class="number">GST</th>' +
       '<th class="number">Total</th><th>Status</th><th>Actions</th>' +
@@ -53,16 +50,16 @@ function renderInvoiceList() {
     invoices.forEach(function(inv) {
       var cur = inv.currency || 'NZD';
       html += '<tr>' +
-        '<td>' + escapeHtml(inv.invoice_id) + '</td>' +
+        '<td><strong>' + escapeHtml(inv.invoice_id) + '</strong></td>' +
         '<td>' + escapeHtml(inv.business_name) + '</td>' +
-        '<td>' + formatDate(inv.date_from) + ' - ' + formatDate(inv.date_to) + '</td>' +
+        '<td>' + formatDate(inv.date_from) + ' &rarr; ' + formatDate(inv.date_to) + '</td>' +
         '<td>' + formatDate(inv.created_date) + '</td>' +
         '<td class="number">' + formatCurrency(inv.subtotal, cur) + '</td>' +
-        '<td class="number">' + (Number(inv.gst_amount) ? formatCurrency(inv.gst_amount, cur) : '-') + '</td>' +
-        '<td class="number">' + formatCurrency(inv.total, cur) + '</td>' +
+        '<td class="number">' + (Number(inv.gst_amount) ? formatCurrency(inv.gst_amount, cur) : '&mdash;') + '</td>' +
+        '<td class="number"><strong>' + formatCurrency(inv.total, cur) + '</strong></td>' +
         '<td><span class="badge badge-' + inv.status + '">' + inv.status + '</span></td>' +
         '<td class="actions">' +
-          '<button class="outline" onclick="viewInvoice(\'' + inv.invoice_id + '\')">View</button> ' +
+          '<button class="btn-small" onclick="viewInvoice(\'' + inv.invoice_id + '\')">View</button> ' +
           buildStatusButton(inv) +
         '</td>' +
         '</tr>';
@@ -71,40 +68,34 @@ function renderInvoiceList() {
     html += '</tbody></table>';
     content.innerHTML = html;
   }).catch(function(err) {
-    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+    content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
 function buildStatusButton(inv) {
   if (inv.status === 'draft') {
-    return '<button class="outline secondary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'sent\')">Mark Sent</button>';
+    return '<button class="btn-small" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'sent\')">Mark Sent</button>';
   } else if (inv.status === 'sent') {
-    return '<button class="outline secondary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'paid\')">Mark Paid</button>';
-  } else if (inv.status === 'paid') {
-    return '';
-  } else if (inv.status === 'void') {
-    return '<span class="badge badge-void">void</span>';
+    return '<button class="btn-small btn-primary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'paid\')">Mark Paid</button>';
   }
   return '';
 }
 
 function changeInvoiceStatus(invoiceId, newStatus) {
   serverCall('updateInvoiceStatusFromClient', invoiceId + '|' + newStatus).then(function() {
-    showToast('Invoice status updated!');
+    showToast('Invoice marked as ' + newStatus);
     renderInvoiceList();
-  }).catch(function(err) {
-    showToast(err.message, 'error');
-  });
+    App.invalidate(['budget']);
+  }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
 function viewInvoice(invoiceId) {
   var content = document.getElementById('invoice-tab-content');
   content.innerHTML = '<div aria-busy="true">Loading invoice...</div>';
-
   serverCall('getInvoiceDetails', invoiceId).then(function(data) {
     renderInvoiceDetail(data);
   }).catch(function(err) {
-    content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+    content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -114,59 +105,60 @@ function renderInvoiceDetail(data) {
   var my = data.myDetails || {};
   var currency = biz.currency || 'NZD';
   var content = document.getElementById('invoice-tab-content');
+  var includeGst = inv.include_gst === true || inv.include_gst === 'true' || inv.include_gst === 'TRUE';
 
   var html =
-    '<div class="no-print" style="margin-bottom:1rem;">' +
-      '<button class="outline" onclick="showInvoiceTab(\'list\')">&larr; Back to List</button> ' +
-      '<button onclick="window.print()">Print Invoice</button>' +
+    '<div class="no-print invoice-toolbar">' +
+      '<button class="btn-subtle" onclick="showInvoiceTab(\'list\')">&larr; Back</button> ' +
+      '<button class="btn-subtle" onclick="editInvoice(\'' + inv.invoice_id + '\')">Edit</button> ' +
+      '<button onclick="window.print()">Print / Save PDF</button>' +
     '</div>' +
 
     '<article class="invoice-print">' +
-      '<header>' +
-        '<div style="display:flex;justify-content:space-between;align-items:start;">' +
-          '<div>' +
-            '<h2 style="margin:0;">INVOICE</h2>' +
-            '<p style="margin:0;color:var(--pico-muted-color);">' + escapeHtml(inv.invoice_id) + '</p>' +
-          '</div>' +
-          '<div style="text-align:right;">' +
-            '<strong>Date:</strong> ' + formatDate(inv.created_date) + '<br>' +
-            '<strong>Period:</strong> ' + formatDate(inv.date_from) + ' - ' + formatDate(inv.date_to) + '<br>' +
-            '<strong>Status:</strong> <span class="badge badge-' + inv.status + '">' + inv.status + '</span>' +
-          '</div>' +
+      '<header class="invoice-header">' +
+        '<div>' +
+          '<h2 class="invoice-title">INVOICE</h2>' +
+          '<p class="invoice-id">' + escapeHtml(inv.invoice_id) + '</p>' +
+        '</div>' +
+        '<div class="invoice-meta">' +
+          '<div><span class="label">Date:</span> ' + formatDate(inv.created_date) + '</div>' +
+          '<div><span class="label">Period:</span> ' + formatDate(inv.date_from) + ' &ndash; ' + formatDate(inv.date_to) + '</div>' +
+          '<div><span class="label">Status:</span> <span class="badge badge-' + inv.status + '">' + inv.status + '</span></div>' +
         '</div>' +
       '</header>' +
 
-      '<div style="display:flex;justify-content:space-between;margin:1.5rem 0;">' +
+      '<div class="invoice-parties">' +
         '<div>' +
-          '<strong>From:</strong><br>' +
-          escapeHtml(my.business_name || '') +
-          (my.business_name ? '<br>' : '') +
-          (my.contact_name ? escapeHtml(my.contact_name) + '<br>' : '') +
-          (my.email ? escapeHtml(my.email) + '<br>' : '') +
-          (my.phone ? escapeHtml(my.phone) + '<br>' : '') +
-          (my.address ? escapeHtml(my.address).replace(/\n/g, '<br>') + '<br>' : '') +
-          (my.tax_number ? 'Tax #: ' + escapeHtml(my.tax_number) + '<br>' : '') +
-          (my.gst_number ? 'GST #: ' + escapeHtml(my.gst_number) + '<br>' : '') +
+          '<div class="party-label">From</div>' +
+          '<div class="party-name">' + escapeHtml(my.business_name || '') + '</div>' +
+          (my.contact_name ? '<div>' + escapeHtml(my.contact_name) + '</div>' : '') +
+          (my.email ? '<div>' + escapeHtml(my.email) + '</div>' : '') +
+          (my.phone ? '<div>' + escapeHtml(my.phone) + '</div>' : '') +
+          (my.address ? '<div>' + escapeHtml(my.address).replace(/\n/g, '<br>') + '</div>' : '') +
+          (my.tax_number ? '<div class="muted">Tax #: ' + escapeHtml(my.tax_number) + '</div>' : '') +
+          (my.gst_number ? '<div class="muted">GST #: ' + escapeHtml(my.gst_number) + '</div>' : '') +
         '</div>' +
-        '<div style="text-align:right;">' +
-          '<strong>Bill To:</strong><br>' +
-          escapeHtml(biz.name || '') + '<br>' +
-          (biz.contact_name ? escapeHtml(biz.contact_name) + '<br>' : '') +
-          (biz.email ? escapeHtml(biz.email) + '<br>' : '') +
-          (biz.address ? escapeHtml(biz.address).replace(/\n/g, '<br>') : '') +
+        '<div class="party-right">' +
+          '<div class="party-label">Bill To</div>' +
+          '<div class="party-name">' + escapeHtml(biz.name || '') + '</div>' +
+          (biz.contact_name ? '<div>' + escapeHtml(biz.contact_name) + '</div>' : '') +
+          (biz.email ? '<div>' + escapeHtml(biz.email) + '</div>' : '') +
+          (biz.address ? '<div>' + escapeHtml(biz.address).replace(/\n/g, '<br>') + '</div>' : '') +
         '</div>' +
       '</div>';
 
-  // Time entry line items grouped by code
+  if (inv.description) {
+    html += '<div class="invoice-description"><em>' + escapeHtml(inv.description) + '</em></div>';
+  }
+
   if (data.codeGroups && data.codeGroups.length > 0) {
-    html += '<h4>Services</h4>' +
-      '<table><thead><tr>' +
+    html += '<h4 class="section-label">Services</h4>' +
+      '<table class="invoice-table"><thead><tr>' +
         '<th>Code</th><th>Description</th><th class="number">Hours</th>' +
         '<th class="number">Rate</th><th class="number">Amount</th>' +
       '</tr></thead><tbody>';
 
     data.codeGroups.forEach(function(group) {
-      // Look up code description from cache
       var codeDesc = group.code;
       if (AppCache.workCodes) {
         var wc = AppCache.workCodes.find(function(c) { return c.code_id === group.code; });
@@ -183,10 +175,9 @@ function renderInvoiceDetail(data) {
     html += '</tbody></table>';
   }
 
-  // Expenses
   if (data.expenses && data.expenses.length > 0) {
-    html += '<h4>Expenses</h4>' +
-      '<table><thead><tr>' +
+    html += '<h4 class="section-label">Expenses</h4>' +
+      '<table class="invoice-table"><thead><tr>' +
         '<th>Date</th><th>Code</th><th>Description</th><th class="number">Amount</th>' +
       '</tr></thead><tbody>';
 
@@ -205,52 +196,104 @@ function renderInvoiceDetail(data) {
     html += '</tbody></table>';
   }
 
-  // Totals
-  var includeGst = inv.include_gst === true || inv.include_gst === 'true' || inv.include_gst === 'TRUE';
-  html += '<div style="text-align:right;margin-top:1.5rem;">' +
-    '<table style="margin-left:auto;width:auto;">' +
-      '<tr><td style="text-align:left;padding-right:2rem;">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
-
+  html += '<div class="invoice-totals">' +
+    '<table><tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
   if (includeGst) {
-    var gstPct = Number(inv.gst_rate) || 0.15;
-    html += '<tr><td style="text-align:left;padding-right:2rem;">GST (' + (gstPct * 100).toFixed(0) + '%)</td><td class="number">' + formatCurrency(inv.gst_amount, currency) + '</td></tr>';
+    var gstPct = Number(inv.gst_rate) || 0;
+    html += '<tr><td class="label">GST (' + (gstPct * 100).toFixed(0) + '%)</td>' +
+            '<td class="number">' + formatCurrency(inv.gst_amount, currency) + '</td></tr>';
   }
+  html += '<tr class="grand-total"><td class="label">Total</td><td class="number">' + formatCurrency(inv.total, currency) + '</td></tr></table></div>';
 
-  html += '<tr><td style="text-align:left;padding-right:2rem;"><strong>Total</strong></td><td class="number"><strong>' + formatCurrency(inv.total, currency) + '</strong></td></tr>' +
-    '</table></div>';
-
-  // Payment details
   if (my.bank_account || my.payment_terms) {
-    html += '<div style="margin-top:1.5rem;">';
-    if (my.payment_terms) html += '<strong>Payment Terms:</strong> ' + escapeHtml(my.payment_terms) + '<br>';
-    if (my.bank_account) html += '<strong>Bank Account:</strong> ' + escapeHtml(my.bank_account);
+    html += '<div class="invoice-footer">';
+    if (my.payment_terms) html += '<div><span class="label">Payment Terms:</span> ' + escapeHtml(my.payment_terms) + '</div>';
+    if (my.bank_account) html += '<div><span class="label">Bank Account:</span> ' + escapeHtml(my.bank_account) + '</div>';
     html += '</div>';
   }
 
   if (inv.notes) {
-    html += '<div style="margin-top:1rem;"><strong>Notes:</strong><br>' + escapeHtml(inv.notes) + '</div>';
+    html += '<div class="invoice-notes"><strong>Notes</strong><br>' + escapeHtml(inv.notes).replace(/\n/g, '<br>') + '</div>';
   }
 
   html += '</article>';
 
-  // Budget allocations if they exist (not printed)
   if (data.allocations && data.allocations.length > 0) {
-    html += '<section class="no-print"><h4>Budget Allocations</h4><table><thead><tr>' +
+    html += '<section class="no-print"><h4 class="section-label">Budget Allocations</h4>' +
+      '<table class="data-table"><thead><tr>' +
       '<th>Category</th><th class="number">%</th><th class="number">Amount</th><th>Status</th>' +
       '</tr></thead><tbody>';
-
     data.allocations.forEach(function(a) {
+      var status = (a.status === 'transferred' || a.status === 'reconciled') ? 'paid' : (a.status === 'pending' ? 'allocated' : a.status);
       html += '<tr>' +
         '<td>' + escapeHtml(a.category) + '</td>' +
         '<td class="number">' + formatPercent(a.percentage) + '</td>' +
         '<td class="number">' + formatCurrency(a.amount, currency) + '</td>' +
-        '<td><span class="badge badge-' + a.status + '">' + a.status + '</span></td>' +
+        '<td><span class="badge badge-' + status + '">' + status + '</span></td>' +
         '</tr>';
     });
     html += '</tbody></table></section>';
   }
 
   content.innerHTML = html;
+}
+
+// --- Edit Invoice ---
+
+function editInvoice(invoiceId) {
+  var content = document.getElementById('invoice-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  serverCall('getInvoiceDetails', invoiceId).then(function(data) {
+    var inv = data.invoice;
+    var includeGst = inv.include_gst === true || inv.include_gst === 'true' || inv.include_gst === 'TRUE';
+    var gstRate = Number(inv.gst_rate) || 0;
+
+    var html =
+      '<div class="invoice-toolbar">' +
+        '<button class="btn-subtle" onclick="viewInvoice(\'' + invoiceId + '\')">&larr; Cancel</button>' +
+      '</div>' +
+      '<article>' +
+        '<h3>Edit Invoice ' + escapeHtml(invoiceId) + '</h3>' +
+        '<p class="muted">Line items come from time entries and expenses &mdash; edit those directly if needed, then regenerate. Here you can adjust the invoice metadata and GST.</p>' +
+        '<form id="edit-invoice-form" onsubmit="submitInvoiceEdit(event, \'' + invoiceId + '\')">' +
+          '<label>Description' +
+            '<input type="text" id="edit-inv-desc" value="' + escapeHtml(inv.description || '') + '">' +
+          '</label>' +
+          '<label>Notes' +
+            '<textarea id="edit-inv-notes" rows="3">' + escapeHtml(inv.notes || '') + '</textarea>' +
+          '</label>' +
+          '<div class="form-row">' +
+            '<label><input type="checkbox" id="edit-inv-gst"' + (includeGst ? ' checked' : '') + '> Include GST</label>' +
+            '<label>GST Rate (%) <input type="number" id="edit-inv-gst-rate" step="0.01" value="' + (gstRate * 100).toFixed(2) + '" min="0" max="100"></label>' +
+          '</div>' +
+          '<div class="form-actions">' +
+            '<button type="submit">Save Changes</button>' +
+            '<button type="button" class="btn-subtle" onclick="viewInvoice(\'' + invoiceId + '\')">Cancel</button>' +
+          '</div>' +
+        '</form>' +
+      '</article>';
+
+    content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function submitInvoiceEdit(event, invoiceId) {
+  event.preventDefault();
+  var data = {
+    invoice_id: invoiceId,
+    description: document.getElementById('edit-inv-desc').value,
+    notes: document.getElementById('edit-inv-notes').value,
+    include_gst: document.getElementById('edit-inv-gst').checked,
+    gst_rate: Number(document.getElementById('edit-inv-gst-rate').value) / 100
+  };
+
+  serverCall('updateInvoice', data).then(function() {
+    showToast('Invoice updated');
+    viewInvoice(invoiceId);
+  }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
 // --- Create Invoice ---
@@ -296,18 +339,16 @@ function previewInvoice() {
 
   serverCall('getUninvoicedItems', { businessId: bizId, dateFrom: from, dateTo: to }).then(function(items) {
     if (items.timeEntries.length === 0 && items.expenses.length === 0) {
-      preview.innerHTML = '<p>No uninvoiced items found for this period.</p>';
+      preview.innerHTML = '<p class="muted">No uninvoiced items found for this period.</p>';
       return;
     }
 
-    var html = '<h4>Items to Invoice</h4>';
+    var html = '<h4 class="section-label">Items to Invoice</h4>';
 
-    // Time entries table
     if (items.timeEntries.length > 0) {
       var timeTotal = items.timeEntries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0);
-      html += '<p><strong>' + items.timeEntries.length + ' time entries</strong> totaling ' + formatCurrency(timeTotal, currency) + '</p>';
-
-      html += '<table><thead><tr><th>Date</th><th>Code</th><th class="number">Hours</th><th>Description</th><th class="number">Amount</th></tr></thead><tbody>';
+      html += '<p><strong>' + items.timeEntries.length + ' time entries</strong> &mdash; ' + formatCurrency(timeTotal, currency) + '</p>';
+      html += '<table class="data-table"><thead><tr><th>Date</th><th>Code</th><th class="number">Hours</th><th>Description</th><th class="number">Amount</th></tr></thead><tbody>';
       items.timeEntries.forEach(function(te) {
         html += '<tr><td>' + formatDate(te.date) + '</td><td>' + escapeHtml(te.work_code) + '</td>' +
           '<td class="number">' + (Number(te.hours) || 0).toFixed(2) + '</td>' +
@@ -317,12 +358,10 @@ function previewInvoice() {
       html += '</tbody></table>';
     }
 
-    // Expenses table
     if (items.expenses.length > 0) {
       var expTotal = items.expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
-      html += '<p><strong>' + items.expenses.length + ' expenses</strong> totaling ' + formatCurrency(expTotal, currency) + '</p>';
-
-      html += '<table><thead><tr><th>Date</th><th>Code</th><th>Description</th><th class="number">Amount</th></tr></thead><tbody>';
+      html += '<p><strong>' + items.expenses.length + ' expenses</strong> &mdash; ' + formatCurrency(expTotal, currency) + '</p>';
+      html += '<table class="data-table"><thead><tr><th>Date</th><th>Code</th><th>Description</th><th class="number">Amount</th></tr></thead><tbody>';
       items.expenses.forEach(function(exp) {
         html += '<tr><td>' + formatDate(exp.date) + '</td><td>' + escapeHtml(exp.work_code) + '</td>' +
           '<td>' + escapeHtml(exp.description) + '</td>' +
@@ -335,26 +374,24 @@ function previewInvoice() {
                    items.expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
     var gst = includeGst ? Math.round(subtotal * gstRate * 100) / 100 : 0;
 
-    html += '<div style="margin-top:1rem;padding:1rem;background:var(--pico-card-background-color);border-radius:0.5rem;">' +
+    html += '<div class="preview-totals">' +
       '<strong>Subtotal:</strong> ' + formatCurrency(subtotal, currency);
     if (includeGst) {
-      html += ' | <strong>GST (' + (gstRate * 100).toFixed(0) + '%):</strong> ' + formatCurrency(gst, currency);
+      html += ' &nbsp; <strong>GST (' + (gstRate * 100).toFixed(0) + '%):</strong> ' + formatCurrency(gst, currency);
     }
-    html += ' | <strong>Total:</strong> ' + formatCurrency(subtotal + gst, currency) +
-      '</div>';
+    html += ' &nbsp; <strong>Total:</strong> ' + formatCurrency(subtotal + gst, currency) + '</div>';
 
-    html += '<div style="margin-top:1rem;">' +
-      '<label>Invoice Description <input type="text" id="inv-desc" placeholder="Description for the invoice"></label>' +
-      '<label>Notes <textarea id="inv-notes" placeholder="Additional notes (payment terms, etc.)"></textarea></label>' +
-      '<label>Tax Already Withheld <input type="number" id="inv-tax-withheld" step="0.01" value="0" min="0" placeholder="Amount withheld by payer"></label>' +
+    html += '<div class="form-stack">' +
+      '<label>Invoice Description <input type="text" id="inv-desc" placeholder="Optional description"></label>' +
+      '<label>Notes <textarea id="inv-notes" rows="2" placeholder="Additional notes"></textarea></label>' +
       '<div class="form-actions">' +
         '<button onclick="confirmCreateInvoice()">Create Invoice</button>' +
-        '<button class="outline secondary" onclick="renderCreateInvoice()">Cancel</button>' +
+        '<button class="btn-subtle" onclick="renderCreateInvoice()">Cancel</button>' +
       '</div></div>';
 
     preview.innerHTML = html;
   }).catch(function(err) {
-    preview.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+    preview.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -366,17 +403,15 @@ function confirmCreateInvoice() {
     includeGst: document.getElementById('inv-gst').checked,
     gstRate: Number(document.getElementById('inv-gst-rate').value) / 100,
     description: document.getElementById('inv-desc').value,
-    notes: document.getElementById('inv-notes').value,
-    taxWithheld: document.getElementById('inv-tax-withheld').value
+    notes: document.getElementById('inv-notes').value
   };
 
   if (!confirm('Create this invoice? Time entries and expenses will be marked as invoiced.')) return;
 
   serverCall('generateInvoice', params).then(function(invoice) {
-    showToast('Invoice ' + invoice.invoice_id + ' created!');
+    showToast('Invoice ' + invoice.invoice_id + ' created');
+    App.invalidate(['hours', 'budget']);
     showInvoiceTab('list');
-  }).catch(function(err) {
-    showToast(err.message, 'error');
-  });
+  }).catch(function(err) { showToast(err.message, 'error'); });
 }
 </script>

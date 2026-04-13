@@ -3,7 +3,9 @@
  * Shared utility functions for the frontend.
  */
 
-// Cache for reference data (businesses, codes, accounts, rules)
+var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Cache for reference data
 var AppCache = {
   businesses: null,
   workCodes: null,
@@ -21,18 +23,17 @@ var AppCache = {
 };
 
 /**
- * Wrapper around google.script.run for cleaner async calls.
- * Returns a Promise with a timeout to prevent hanging.
+ * Promise wrapper around google.script.run with a timeout.
  */
 function serverCall(functionName, args) {
-  var TIMEOUT_MS = 15000; // 15 seconds
+  var TIMEOUT_MS = 20000;
 
   return new Promise(function(resolve, reject) {
     var settled = false;
     var timer = setTimeout(function() {
       if (!settled) {
         settled = true;
-        console.error('[serverCall] TIMEOUT after ' + TIMEOUT_MS + 'ms: ' + functionName);
+        console.error('[serverCall] TIMEOUT: ' + functionName);
         reject(new Error('Server call "' + functionName + '" timed out after ' + (TIMEOUT_MS / 1000) + 's'));
       }
     }, TIMEOUT_MS);
@@ -42,7 +43,6 @@ function serverCall(functionName, args) {
         if (!settled) {
           settled = true;
           clearTimeout(timer);
-          console.log('[serverCall] OK: ' + functionName);
           resolve(result);
         }
       })
@@ -55,7 +55,6 @@ function serverCall(functionName, args) {
         }
       });
 
-    console.log('[serverCall] Calling: ' + functionName);
     if (args !== undefined) {
       runner[functionName](args);
     } else {
@@ -87,22 +86,59 @@ function formatCurrency(amount, currency) {
       currency: currency
     }).format(amount || 0);
   } catch (e) {
-    // Fallback for unknown currency codes
     return currency + ' ' + (Number(amount) || 0).toFixed(2);
   }
 }
 
 /**
- * Format a date string for display.
+ * Format a date as "dd.mmm.yy" (e.g. "12.Apr.26").
+ * Accepts Date objects, ISO strings, or "YYYY-MM-DD" strings.
  */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  var d = new Date(dateStr);
-  return d.toLocaleDateString('en-NZ', { year: 'numeric', month: 'short', day: 'numeric' });
+  var d = (dateStr instanceof Date) ? dateStr : new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  var day = String(d.getDate()).padStart(2, '0');
+  var mon = MONTHS_SHORT[d.getMonth()];
+  var yr = String(d.getFullYear()).slice(-2);
+  return day + '.' + mon + '.' + yr;
 }
 
 /**
- * Format a number as percentage.
+ * Format a month as "mmm.yy" (e.g. "Apr.26"). Accepts "YYYY-MM" or ISO strings.
+ */
+function formatMonth(monthStr) {
+  if (!monthStr) return '';
+  var str = String(monthStr);
+  var m = str.match(/^(\d{4})-(\d{1,2})/);
+  if (m) {
+    var yr = m[1].slice(-2);
+    var mon = MONTHS_SHORT[parseInt(m[2], 10) - 1];
+    return mon + '.' + yr;
+  }
+  var d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return MONTHS_SHORT[d.getMonth()] + '.' + String(d.getFullYear()).slice(-2);
+  }
+  return str;
+}
+
+/**
+ * Extract YYYY-MM from a month value (handles ISO strings).
+ */
+function normalizeMonth(val) {
+  if (!val) return '';
+  var str = String(val);
+  var m = str.match(/^(\d{4})-(\d{1,2})/);
+  if (m) {
+    var mm = parseInt(m[2], 10);
+    return m[1] + '-' + (mm < 10 ? '0' + mm : '' + mm);
+  }
+  return str;
+}
+
+/**
+ * Format a number as a percentage.
  */
 function formatPercent(value) {
   return (Number(value) * 100).toFixed(1) + '%';
@@ -140,31 +176,24 @@ function escapeHtml(str) {
 }
 
 /**
- * Load reference data into cache. Returns a promise.
- * Each call is wrapped so a single failure won't block everything.
+ * Load all reference data via a single bootstrap RPC.
+ * Massive speedup over 5 separate calls.
  */
 function loadReferenceData() {
-  console.log('[loadReferenceData] Starting...');
-
-  function safeLoad(name, serverFn, fallback) {
-    return serverCall(serverFn).then(function(data) {
-      AppCache[name] = data;
-      console.log('[loadReferenceData] Loaded ' + name + ':', (data || []).length || 'ok');
-    }).catch(function(err) {
-      console.warn('[loadReferenceData] Failed to load ' + name + ', using fallback:', err.message);
-      AppCache[name] = fallback;
-    });
-  }
-
-  var promises = [];
-  if (!AppCache.businesses) promises.push(safeLoad('businesses', 'getBusinesses', []));
-  if (!AppCache.workCodes) promises.push(safeLoad('workCodes', 'getWorkCodes', []));
-  if (!AppCache.accounts) promises.push(safeLoad('accounts', 'getAccounts', []));
-  if (!AppCache.budgetRules) promises.push(safeLoad('budgetRules', 'getBudgetRules', []));
-  if (!AppCache.myDetails) promises.push(safeLoad('myDetails', 'getMyDetails', {}));
-
-  return Promise.all(promises).then(function() {
-    console.log('[loadReferenceData] All done.');
+  return serverCall('bootstrap').then(function(data) {
+    AppCache.businesses = data.businesses || [];
+    AppCache.workCodes = data.workCodes || [];
+    AppCache.accounts = data.accounts || [];
+    AppCache.budgetRules = data.budgetRules || [];
+    AppCache.myDetails = data.myDetails || {};
+  }).catch(function(err) {
+    console.warn('[bootstrap] Failed, falling back to empty cache:', err.message);
+    AppCache.businesses = AppCache.businesses || [];
+    AppCache.workCodes = AppCache.workCodes || [];
+    AppCache.accounts = AppCache.accounts || [];
+    AppCache.budgetRules = AppCache.budgetRules || [];
+    AppCache.myDetails = AppCache.myDetails || {};
+    throw err;
   });
 }
 
@@ -172,7 +201,10 @@ function loadReferenceData() {
  * Get today's date as YYYY-MM-DD.
  */
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  var d = new Date();
+  var mo = String(d.getMonth() + 1).padStart(2, '0');
+  var da = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mo + '-' + da;
 }
 
 /**

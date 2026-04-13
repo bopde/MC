@@ -1,8 +1,11 @@
 <script>
 /**
  * Account Summaries module.
- * - Monthly account balance entry
- * - Year overview with all accounts (15-month periods)
+ * - Monthly balance entry across all accounts
+ * - Year overview: compact matrix of balances + monthly deltas
+ *
+ * Months are normalised client-side so Sheets' Date coercion ("2026-04"
+ * -> Date object -> ISO string) can't break lookups.
  */
 
 function renderAccountsPage(container) {
@@ -35,11 +38,11 @@ function renderMonthlySummary() {
   var content = document.getElementById('account-tab-content');
 
   content.innerHTML =
-    '<div class="form-row" style="margin-bottom:1rem;">' +
-      '<label>Month <input type="month" id="as-month" value="' + currentMonth() + '"></label>' +
-      '<label style="align-self:end;"><button onclick="loadMonthlySummaries()">Load</button></label>' +
+    '<div class="filters">' +
+      '<label>Month <input type="month" id="as-month" value="' + currentMonth() + '" onchange="loadMonthlySummaries()"></label>' +
+      '<button class="btn-subtle" onclick="loadMonthlySummaries()">Reload</button>' +
     '</div>' +
-    '<div id="monthly-summaries">Click "Load" to see accounts for this month.</div>';
+    '<div id="monthly-summaries"><div aria-busy="true">Loading...</div></div>';
 
   loadMonthlySummaries();
 }
@@ -47,79 +50,110 @@ function renderMonthlySummary() {
 function loadMonthlySummaries() {
   var month = document.getElementById('as-month').value;
   if (!month) return;
+  month = normalizeMonth(month);
 
   var el = document.getElementById('monthly-summaries');
   el.innerHTML = '<div aria-busy="true">Loading...</div>';
 
-  Promise.all([
-    serverCall('getAccountSummariesForMonth', month),
-    serverCall('getAccounts')
-  ]).then(function(results) {
-    var summaries = results[0];
-    var accounts = results[1];
+  serverCall('getAccountSummariesForMonth', month).then(function(summaries) {
+    var accounts = AppCache.accounts || [];
 
-    // Build a map of existing summaries
     var summaryMap = {};
-    summaries.forEach(function(s) { summaryMap[s.account_id] = s; });
+    (summaries || []).forEach(function(s) {
+      summaryMap[s.account_id] = s;
+    });
 
     if (accounts.length === 0) {
-      el.innerHTML = '<p>No accounts configured. Go to Settings to add accounts.</p>';
+      el.innerHTML = '<article class="empty-state"><h3>No accounts configured</h3>' +
+        '<p class="muted">Add accounts in Settings first.</p></article>';
       return;
     }
 
-    var html = '<form id="monthly-form" onsubmit="saveMonthlySummaries(event)">' +
-      '<table><thead><tr>' +
-        '<th>Account</th><th>Type</th><th>Currency</th><th class="number">Ending Balance</th>' +
-        '<th class="number">Realised Gains</th><th class="number">Unrealised Gains</th>' +
-        '<th class="number">Tax Paid</th><th>Notes</th>' +
-      '</tr></thead><tbody>';
+    var html =
+      '<article>' +
+        '<header><h3 style="margin:0;">Balances for ' + formatMonth(month) + '</h3>' +
+        '<p class="muted" style="margin:0.25rem 0 0;">Enter end-of-month balances. Rows save in one click.</p></header>' +
+        '<form id="monthly-form" onsubmit="saveMonthlySummaries(event)">' +
+          '<div class="scroll-x">' +
+          '<table class="data-table">' +
+          '<thead><tr>' +
+            '<th>Account</th><th>Type</th><th>Currency</th>' +
+            '<th class="number">Ending balance</th>' +
+            '<th class="number">Realised gains</th>' +
+            '<th class="number">Unrealised gains</th>' +
+            '<th class="number">Tax paid</th>' +
+            '<th>Notes</th>' +
+          '</tr></thead><tbody>';
 
     accounts.forEach(function(acc) {
       var s = summaryMap[acc.account_id] || {};
       html += '<tr data-account-id="' + acc.account_id + '">' +
         '<td><strong>' + escapeHtml(acc.name) + '</strong></td>' +
-        '<td>' + escapeHtml(acc.type) + '</td>' +
-        '<td>' + escapeHtml(acc.currency || 'NZD') + '</td>' +
-        '<td><input type="number" step="0.01" class="as-balance" value="' + (s.ending_balance || '') + '"></td>' +
-        '<td><input type="number" step="0.01" class="as-realised" value="' + (s.realised_gains || '') + '"></td>' +
-        '<td><input type="number" step="0.01" class="as-unrealised" value="' + (s.unrealised_gains || '') + '"></td>' +
-        '<td><input type="number" step="0.01" class="as-tax" value="' + (s.tax_paid || '') + '"></td>' +
+        '<td class="muted">' + escapeHtml(acc.type) + '</td>' +
+        '<td class="muted">' + escapeHtml(acc.currency || 'NZD') + '</td>' +
+        '<td><input type="number" step="0.01" class="as-balance" value="' + (s.ending_balance != null && s.ending_balance !== '' ? s.ending_balance : '') + '"></td>' +
+        '<td><input type="number" step="0.01" class="as-realised" value="' + (s.realised_gains != null && s.realised_gains !== '' ? s.realised_gains : '') + '"></td>' +
+        '<td><input type="number" step="0.01" class="as-unrealised" value="' + (s.unrealised_gains != null && s.unrealised_gains !== '' ? s.unrealised_gains : '') + '"></td>' +
+        '<td><input type="number" step="0.01" class="as-tax" value="' + (s.tax_paid != null && s.tax_paid !== '' ? s.tax_paid : '') + '"></td>' +
         '<td><input type="text" class="as-notes" value="' + escapeHtml(s.notes || '') + '"></td>' +
         '</tr>';
     });
 
-    html += '</tbody></table>' +
-      '<div class="form-actions"><button type="submit">Save All</button></div></form>';
+    html += '</tbody></table></div>' +
+      '<div class="form-actions">' +
+        '<button type="submit">Save all</button>' +
+        '<span class="muted" id="save-status"></span>' +
+      '</div></form></article>';
 
     el.innerHTML = html;
   }).catch(function(err) {
-    el.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+    el.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
 function saveMonthlySummaries(event) {
   event.preventDefault();
-  var month = document.getElementById('as-month').value;
+  var month = normalizeMonth(document.getElementById('as-month').value);
   var rows = document.querySelectorAll('#monthly-form tbody tr');
   var promises = [];
+  var saving = 0;
 
   rows.forEach(function(row) {
-    var data = {
+    var balance = row.querySelector('.as-balance').value;
+    var realised = row.querySelector('.as-realised').value;
+    var unrealised = row.querySelector('.as-unrealised').value;
+    var tax = row.querySelector('.as-tax').value;
+    var notes = row.querySelector('.as-notes').value;
+
+    // Skip rows with no data at all
+    if (balance === '' && realised === '' && unrealised === '' && tax === '' && !notes) return;
+
+    saving++;
+    promises.push(serverCall('saveAccountSummary', {
       account_id: row.dataset.accountId,
       month: month,
-      ending_balance: row.querySelector('.as-balance').value || 0,
-      realised_gains: row.querySelector('.as-realised').value || 0,
-      unrealised_gains: row.querySelector('.as-unrealised').value || 0,
-      tax_paid: row.querySelector('.as-tax').value || 0,
-      notes: row.querySelector('.as-notes').value || ''
-    };
-    promises.push(serverCall('saveAccountSummary', data));
+      ending_balance: balance || 0,
+      realised_gains: realised || 0,
+      unrealised_gains: unrealised || 0,
+      tax_paid: tax || 0,
+      notes: notes || ''
+    }));
   });
 
+  var status = document.getElementById('save-status');
+  if (saving === 0) {
+    if (status) status.textContent = 'Nothing to save.';
+    return;
+  }
+  if (status) status.textContent = 'Saving ' + saving + '...';
+
   Promise.all(promises).then(function() {
-    showToast('Account summaries saved!');
+    showToast('Saved ' + saving + ' account row' + (saving === 1 ? '' : 's'));
+    if (status) status.textContent = 'Saved.';
+    App.invalidate(['accounts']);
   }).catch(function(err) {
     showToast(err.message, 'error');
+    if (status) status.textContent = '';
   });
 }
 
@@ -130,11 +164,11 @@ function renderYearOverview() {
   var year = new Date().getFullYear().toString();
 
   content.innerHTML =
-    '<div class="form-row" style="margin-bottom:1rem;">' +
-      '<label>Year <input type="number" id="ao-year" value="' + year + '" min="2020" max="2099"></label>' +
-      '<label style="align-self:end;"><button onclick="loadYearOverview()">Load</button></label>' +
+    '<div class="filters">' +
+      '<label>Year <input type="number" id="ao-year" value="' + year + '" min="2020" max="2099" onchange="loadYearOverview()"></label>' +
+      '<button class="btn-subtle" onclick="loadYearOverview()">Reload</button>' +
     '</div>' +
-    '<div id="year-overview"></div>';
+    '<div id="year-overview"><div aria-busy="true">Loading...</div></div>';
 
   loadYearOverview();
 }
@@ -145,11 +179,15 @@ function loadYearOverview() {
   el.innerHTML = '<div aria-busy="true">Loading...</div>';
 
   serverCall('getYearOverview', year).then(function(data) {
-    var accounts = data.accounts;
-    var summaries = data.summaries;
+    var accounts = data.accounts || [];
+    var summaries = (data.summaries || []).map(function(s) {
+      s.month = normalizeMonth(s.month);
+      return s;
+    });
 
     if (accounts.length === 0) {
-      el.innerHTML = '<p>No accounts configured.</p>';
+      el.innerHTML = '<article class="empty-state"><h3>No accounts configured</h3>' +
+        '<p class="muted">Add accounts in Settings first.</p></article>';
       return;
     }
 
@@ -169,45 +207,137 @@ function loadYearOverview() {
       sMap[s.account_id + '|' + s.month] = s;
     });
 
-    var html = '<div style="overflow-x:auto;">';
-
+    // --- Group totals tile ---
+    var totalByCurrency = {};
+    var latestByAccount = {};
     accounts.forEach(function(acc) {
-      var accCurrency = acc.currency || 'NZD';
-      html += '<h4>' + escapeHtml(acc.name) + ' <small>(' + escapeHtml(acc.type) + ' / ' + escapeHtml(accCurrency) + ')</small></h4>' +
-        '<table><thead><tr><th>Month</th><th class="number">Balance</th>' +
-        '<th class="number">Realised</th><th class="number">Unrealised</th>' +
-        '<th class="number">Tax Paid</th><th>Notes</th></tr></thead><tbody>';
-
-      var prevBalance = null;
-      months.forEach(function(month) {
-        var s = sMap[acc.account_id + '|' + month];
-        var balance = s ? Number(s.ending_balance) : null;
-        var change = '';
-        if (prevBalance !== null && balance !== null) {
-          var diff = balance - prevBalance;
-          change = ' <small style="color:' + (diff >= 0 ? 'green' : 'red') + ';">' +
-            (diff >= 0 ? '+' : '') + formatCurrency(diff, accCurrency) + '</small>';
+      // Latest = most recent non-empty balance in the selected window
+      for (var i = months.length - 1; i >= 0; i--) {
+        var s = sMap[acc.account_id + '|' + months[i]];
+        if (s && s.ending_balance !== '' && s.ending_balance !== null && s.ending_balance !== undefined) {
+          latestByAccount[acc.account_id] = { month: months[i], balance: Number(s.ending_balance) };
+          break;
         }
-
-        html += '<tr>' +
-          '<td>' + month + '</td>' +
-          '<td class="number">' + (balance !== null ? formatCurrency(balance, accCurrency) + change : '-') + '</td>' +
-          '<td class="number">' + (s ? formatCurrency(s.realised_gains, accCurrency) : '-') + '</td>' +
-          '<td class="number">' + (s ? formatCurrency(s.unrealised_gains, accCurrency) : '-') + '</td>' +
-          '<td class="number">' + (s ? formatCurrency(s.tax_paid, accCurrency) : '-') + '</td>' +
-          '<td>' + (s ? escapeHtml(s.notes) : '') + '</td>' +
-          '</tr>';
-
-        if (balance !== null) prevBalance = balance;
-      });
-
-      html += '</tbody></table>';
+      }
+    });
+    accounts.forEach(function(acc) {
+      var latest = latestByAccount[acc.account_id];
+      if (!latest) return;
+      var cur = acc.currency || 'NZD';
+      totalByCurrency[cur] = (totalByCurrency[cur] || 0) + latest.balance;
     });
 
-    html += '</div>';
+    var html = '';
+
+    // Top-level totals
+    html += '<section class="flow-overview">';
+    Object.keys(totalByCurrency).forEach(function(cur) {
+      html += '<div class="flow-tile flow-tile--total">' +
+        '<span class="flow-tile__label">Total ' + escapeHtml(cur) + ' (latest)</span>' +
+        '<span class="flow-tile__value">' + formatCurrency(totalByCurrency[cur], cur) + '</span>' +
+        '<span class="flow-tile__detail">across ' + accounts.filter(function(a){ return (a.currency||'NZD') === cur && latestByAccount[a.account_id]; }).length + ' accounts</span>' +
+      '</div>';
+    });
+    html += '</section>';
+
+    // --- Combined matrix ---
+    html += '<article>' +
+      '<header><h3 style="margin:0;">Balances · ' + year + ' → ' + nextYear.slice(-2) + '</h3>' +
+      '<p class="muted" style="margin:0.25rem 0 0;">End-of-month balance per account. Coloured deltas show change vs previous month.</p></header>' +
+      '<div class="scroll-x">' +
+      '<table class="data-table data-table--matrix"><thead><tr>' +
+        '<th class="sticky-col">Account</th>';
+    months.forEach(function(mo) {
+      html += '<th class="number">' + formatMonth(mo) + '</th>';
+    });
+    html += '<th class="number">Latest</th></tr></thead><tbody>';
+
+    accounts.forEach(function(acc) {
+      var cur = acc.currency || 'NZD';
+      html += '<tr>' +
+        '<td class="sticky-col"><strong>' + escapeHtml(acc.name) + '</strong>' +
+        ' <small class="muted">' + escapeHtml(acc.type) + ' · ' + escapeHtml(cur) + '</small></td>';
+
+      var prevBalance = null;
+      months.forEach(function(mo) {
+        var s = sMap[acc.account_id + '|' + mo];
+        if (!s || s.ending_balance === '' || s.ending_balance === null || s.ending_balance === undefined) {
+          html += '<td class="number muted">—</td>';
+          return;
+        }
+        var balance = Number(s.ending_balance);
+        var deltaHtml = '';
+        if (prevBalance !== null) {
+          var diff = balance - prevBalance;
+          if (Math.abs(diff) > 0.005) {
+            var cls = diff >= 0 ? 'delta delta--up' : 'delta delta--down';
+            var sign = diff >= 0 ? '+' : '';
+            deltaHtml = '<div class="' + cls + '">' + sign + formatCurrency(diff, cur) + '</div>';
+          }
+        }
+        html += '<td class="number"><div class="cell-balance">' + formatCurrency(balance, cur) + '</div>' + deltaHtml + '</td>';
+        prevBalance = balance;
+      });
+
+      var latest = latestByAccount[acc.account_id];
+      html += '<td class="number"><strong>' +
+        (latest ? formatCurrency(latest.balance, cur) : '—') +
+        '</strong>' +
+        (latest ? '<div class="muted small">' + formatMonth(latest.month) + '</div>' : '') +
+      '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div></article>';
+
+    // --- Per-account detail (gains/tax) ---
+    html += '<article>' +
+      '<header><h3 style="margin:0;">Gains &amp; tax detail</h3>' +
+      '<p class="muted" style="margin:0.25rem 0 0;">Realised, unrealised, and tax paid per month.</p></header>';
+
+    accounts.forEach(function(acc) {
+      var cur = acc.currency || 'NZD';
+      var hasAny = months.some(function(mo){
+        var s = sMap[acc.account_id + '|' + mo];
+        return s && (Number(s.realised_gains) || Number(s.unrealised_gains) || Number(s.tax_paid));
+      });
+      if (!hasAny) return;
+
+      html += '<h4 class="section-label">' + escapeHtml(acc.name) + ' <small class="muted">(' + escapeHtml(cur) + ')</small></h4>' +
+        '<div class="scroll-x"><table class="data-table data-table--compact">' +
+        '<thead><tr><th>Month</th><th class="number">Realised</th><th class="number">Unrealised</th>' +
+        '<th class="number">Tax paid</th><th>Notes</th></tr></thead><tbody>';
+
+      var rTot = 0, uTot = 0, tTot = 0;
+      months.forEach(function(mo) {
+        var s = sMap[acc.account_id + '|' + mo];
+        if (!s) return;
+        var r = Number(s.realised_gains) || 0;
+        var u = Number(s.unrealised_gains) || 0;
+        var t = Number(s.tax_paid) || 0;
+        if (r === 0 && u === 0 && t === 0 && !s.notes) return;
+        rTot += r; uTot += u; tTot += t;
+        html += '<tr>' +
+          '<td>' + formatMonth(mo) + '</td>' +
+          '<td class="number">' + (r ? formatCurrency(r, cur) : '<span class="muted">—</span>') + '</td>' +
+          '<td class="number">' + (u ? formatCurrency(u, cur) : '<span class="muted">—</span>') + '</td>' +
+          '<td class="number">' + (t ? formatCurrency(t, cur) : '<span class="muted">—</span>') + '</td>' +
+          '<td>' + escapeHtml(s.notes || '') + '</td>' +
+          '</tr>';
+      });
+      html += '<tr class="total-row"><td><strong>Total</strong></td>' +
+        '<td class="number"><strong>' + formatCurrency(rTot, cur) + '</strong></td>' +
+        '<td class="number"><strong>' + formatCurrency(uTot, cur) + '</strong></td>' +
+        '<td class="number"><strong>' + formatCurrency(tTot, cur) + '</strong></td>' +
+        '<td></td></tr>';
+      html += '</tbody></table></div>';
+    });
+
+    html += '</article>';
+
     el.innerHTML = html;
   }).catch(function(err) {
-    el.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
+    el.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 </script>

@@ -76,7 +76,7 @@ function generateInvoice(params) {
     total: total,
     status: 'draft',
     budget_rule_id: '',
-    tax_withheld: Number(params.taxWithheld) || 0,
+    tax_withheld: 0,
     description: params.description || '',
     notes: params.notes || ''
   });
@@ -160,6 +160,43 @@ function updateInvoiceStatus(invoiceId, newStatus) {
   if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
 
   invoice.status = newStatus;
+  updateRow('Invoices', invoice._rowIndex, invoice);
+  return invoice;
+}
+
+/**
+ * Update editable invoice fields: description, notes, GST toggle/rate.
+ * Recalculates GST and total when include_gst or gst_rate changes.
+ *
+ * Expects an object with: invoice_id, and any of:
+ *   description, notes, include_gst, gst_rate
+ */
+function updateInvoice(params) {
+  var invoice = findById('Invoices', params.invoice_id);
+  if (!invoice) throw new Error('Invoice not found: ' + params.invoice_id);
+
+  if (params.description !== undefined) invoice.description = params.description;
+  if (params.notes !== undefined) invoice.notes = params.notes;
+
+  var recalc = false;
+  if (params.include_gst !== undefined) {
+    invoice.include_gst = (params.include_gst === true || params.include_gst === 'true');
+    recalc = true;
+  }
+  if (params.gst_rate !== undefined && params.gst_rate !== '') {
+    invoice.gst_rate = Number(params.gst_rate) || 0;
+    recalc = true;
+  }
+
+  if (recalc) {
+    var subtotal = Number(invoice.subtotal) || 0;
+    var includeGst = invoice.include_gst === true || invoice.include_gst === 'true' || invoice.include_gst === 'TRUE';
+    var rate = includeGst ? (Number(invoice.gst_rate) || 0) : 0;
+    var gstAmount = includeGst ? Math.round(subtotal * rate * 100) / 100 : 0;
+    invoice.gst_amount = gstAmount;
+    invoice.total = subtotal + gstAmount;
+  }
+
   updateRow('Invoices', invoice._rowIndex, invoice);
   return invoice;
 }

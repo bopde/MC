@@ -1,32 +1,55 @@
 <script>
 /**
- * Main application: hash-based router and page initialization.
+ * Main application: hash-based router with persistent page containers.
+ *
+ * Each page has its own <div id="page-{name}"> that stays in the DOM.
+ * Switching tabs only toggles visibility, so form state persists.
+ * A page is rendered ONCE the first time it's visited; subsequent
+ * navigations just show the existing DOM.
  */
 
 var App = {
   currentPage: null,
+  rendered: {},  // pageName -> true once initial render done
 
   pages: {
-    hours: { title: 'Hours & Expenses', render: 'renderHoursPage' },
-    invoices: { title: 'Invoices', render: 'renderInvoicesPage' },
-    budget: { title: 'Budget Allocations', render: 'renderBudgetPage' },
-    accounts: { title: 'Account Summaries', render: 'renderAccountsPage' },
-    settings: { title: 'Settings', render: 'renderSettingsPage' }
+    hours:    { title: 'Hours & Expenses',   render: 'renderHoursPage' },
+    invoices: { title: 'Invoices',           render: 'renderInvoicesPage' },
+    budget:   { title: 'Budget',             render: 'renderBudgetPage' },
+    accounts: { title: 'Accounts',           render: 'renderAccountsPage' },
+    settings: { title: 'Settings',           render: 'renderSettingsPage' }
   },
 
   init: function() {
     window.addEventListener('hashchange', App.route);
-    App.route();
+
+    var host = document.getElementById('app-content');
+    host.innerHTML = '';
+    Object.keys(App.pages).forEach(function(name) {
+      var div = document.createElement('div');
+      div.id = 'page-' + name;
+      div.className = 'page-container';
+      div.style.display = 'none';
+      host.appendChild(div);
+    });
+
+    var loading = document.getElementById('loading');
+    loading.style.display = 'block';
+
+    loadReferenceData().then(function() {
+      loading.style.display = 'none';
+      host.style.display = 'block';
+      App.route();
+    }).catch(function(err) {
+      loading.innerHTML = '<article><p><strong>Error loading data:</strong> ' +
+        escapeHtml(err.message) + '</p><p>Make sure the script is bound to your spreadsheet and setupSheets() has been run.</p></article>';
+    });
   },
 
   route: function() {
     var hash = window.location.hash.replace('#', '') || 'hours';
     var page = App.pages[hash];
-
-    if (!page) {
-      window.location.hash = '#hours';
-      return;
-    }
+    if (!page) { window.location.hash = '#hours'; return; }
 
     App.currentPage = hash;
 
@@ -35,34 +58,52 @@ var App = {
       link.classList.toggle('active', link.dataset.page === hash);
     });
 
-    // Show loading, load reference data, then render
-    var content = document.getElementById('app-content');
-    var loading = document.getElementById('loading');
-    content.style.display = 'none';
-    loading.style.display = 'block';
+    // Hide all page containers, show target
+    Object.keys(App.pages).forEach(function(name) {
+      var c = document.getElementById('page-' + name);
+      if (c) c.style.display = (name === hash) ? 'block' : 'none';
+    });
 
-    console.log('[App.route] Loading page: ' + hash);
-    loadReferenceData().then(function() {
-      console.log('[App.route] Rendering page: ' + hash);
-      content.innerHTML = '<h2>' + page.title + '</h2><div id="page-content"></div>';
-      content.style.display = 'block';
-      loading.style.display = 'none';
-      window[page.render](document.getElementById('page-content'));
-    }).catch(function(err) {
-      console.error('[App.route] Error loading data:', err);
-      content.innerHTML = '<article><p>Error loading data: ' + escapeHtml(err.message) + '</p>' +
-                          '<p>Make sure you have run the setup. See the README for instructions.</p></article>';
-      content.style.display = 'block';
-      loading.style.display = 'none';
+    // Render if this is the first visit
+    var container = document.getElementById('page-' + hash);
+    if (!App.rendered[hash]) {
+      container.innerHTML =
+        '<header class="page-header"><h2>' + page.title + '</h2></header>' +
+        '<div class="page-body"></div>';
+      var body = container.querySelector('.page-body');
+      try {
+        window[page.render](body);
+        App.rendered[hash] = true;
+      } catch (e) {
+        console.error('Render error for ' + hash, e);
+        body.innerHTML = '<article><p>Error rendering page: ' + escapeHtml(e.message) + '</p></article>';
+      }
+    }
+  },
+
+  /**
+   * Invalidate one or more pages so they re-render on next visit.
+   * Used when reference data changes and dependent pages need refresh.
+   */
+  invalidate: function(names) {
+    (names || Object.keys(App.pages)).forEach(function(n) {
+      App.rendered[n] = false;
     });
   },
 
-  refresh: function() {
-    AppCache.clear();
-    App.route();
+  /**
+   * Force re-render of the current page (or a named page if active).
+   */
+  refreshPage: function(name) {
+    name = name || App.currentPage;
+    App.rendered[name] = false;
+    if (name === App.currentPage) {
+      var container = document.getElementById('page-' + name);
+      container.innerHTML = '';
+      App.route();
+    }
   }
 };
 
-// Start the app
 document.addEventListener('DOMContentLoaded', App.init);
 </script>

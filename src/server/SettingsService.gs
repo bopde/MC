@@ -3,6 +3,26 @@
  * Businesses, WorkCodes, Accounts, BudgetRules, MyDetails
  */
 
+/**
+ * Bootstrap: load all reference data in a single RPC.
+ * Replaces 5 separate serverCalls for a major speed-up on app start.
+ */
+function bootstrap() {
+  var result = {
+    businesses: [],
+    workCodes: [],
+    accounts: [],
+    budgetRules: [],
+    myDetails: {}
+  };
+  try { result.businesses = getActive('Businesses'); } catch (e) {}
+  try { result.workCodes = getActive('WorkCodes'); } catch (e) {}
+  try { result.accounts = getActive('Accounts'); } catch (e) {}
+  try { result.budgetRules = getAll('BudgetRules'); } catch (e) {}
+  try { result.myDetails = getMyDetails(); } catch (e) { result.myDetails = {}; }
+  return result;
+}
+
 // --- Businesses ---
 
 function addBusiness(data) {
