@@ -292,6 +292,8 @@ function submitInvoiceEdit(event, invoiceId) {
 
   serverCall('updateInvoice', data).then(function() {
     showToast('Invoice updated');
+    // List row shows totals/description that may have changed; bust budget too in case allocations exist.
+    App.invalidate(['invoices', 'budget']);
     viewInvoice(invoiceId);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }

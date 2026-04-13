@@ -198,6 +198,19 @@ function loadReferenceData() {
 }
 
 /**
+ * Refresh the reference data cache AND invalidate every page cache
+ * so dependent UIs pick up the change on next navigation.
+ * Call after mutating businesses, work codes, accounts, or budget rules.
+ */
+function refreshReferenceData() {
+  return loadReferenceData().then(function() {
+    if (typeof App !== 'undefined' && App.invalidate) {
+      App.invalidate(['hours', 'invoices', 'budget', 'accounts']);
+    }
+  });
+}
+
+/**
  * Get today's date as YYYY-MM-DD.
  */
 function todayStr() {

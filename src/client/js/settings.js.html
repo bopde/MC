@@ -162,8 +162,7 @@ function submitBusiness(event) {
 
   serverCall('addBusiness', data).then(function() {
     showToast('Business added!');
-    AppCache.businesses = null;
-    renderBusinessSettings();
+    refreshReferenceData().then(renderBusinessSettings);
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
@@ -172,8 +171,7 @@ function submitBusiness(event) {
 function toggleBusiness(rowIndex, active) {
   serverCall('toggleEntityFromClient', 'Businesses|' + rowIndex + '|' + active).then(function() {
     showToast(active ? 'Business activated!' : 'Business deactivated!');
-    AppCache.businesses = null;
-    renderBusinessSettings();
+    refreshReferenceData().then(renderBusinessSettings);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -230,8 +228,7 @@ function submitWorkCode(event) {
 
   serverCall('addWorkCode', data).then(function() {
     showToast('Work code added!');
-    AppCache.workCodes = null;
-    renderCodeSettings();
+    refreshReferenceData().then(renderCodeSettings);
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
@@ -240,8 +237,7 @@ function submitWorkCode(event) {
 function toggleCode(rowIndex, active) {
   serverCall('toggleEntityFromClient', 'WorkCodes|' + rowIndex + '|' + active).then(function() {
     showToast(active ? 'Code activated!' : 'Code deactivated!');
-    AppCache.workCodes = null;
-    renderCodeSettings();
+    refreshReferenceData().then(renderCodeSettings);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -316,8 +312,7 @@ function submitAccount(event) {
 
   serverCall('addAccount', data).then(function() {
     showToast('Account added!');
-    AppCache.accounts = null;
-    renderAccountSettings();
+    refreshReferenceData().then(renderAccountSettings);
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
@@ -326,8 +321,7 @@ function submitAccount(event) {
 function toggleAccount(rowIndex, active) {
   serverCall('toggleEntityFromClient', 'Accounts|' + rowIndex + '|' + active).then(function() {
     showToast(active ? 'Account activated!' : 'Account deactivated!');
-    AppCache.accounts = null;
-    renderAccountSettings();
+    refreshReferenceData().then(renderAccountSettings);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -439,8 +433,7 @@ function submitBudgetRule(event) {
 
   serverCall('addBudgetRule', data).then(function() {
     showToast('Budget rule added!');
-    AppCache.budgetRules = null;
-    renderRuleSettings();
+    refreshReferenceData().then(renderRuleSettings);
   }).catch(function(err) {
     showToast(err.message, 'error');
   });

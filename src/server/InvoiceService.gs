@@ -193,8 +193,21 @@ function updateInvoice(params) {
     var includeGst = invoice.include_gst === true || invoice.include_gst === 'true' || invoice.include_gst === 'TRUE';
     var rate = includeGst ? (Number(invoice.gst_rate) || 0) : 0;
     var gstAmount = includeGst ? Math.round(subtotal * rate * 100) / 100 : 0;
+    var newTotal = subtotal + gstAmount;
+
+    // If the total is changing and the invoice is already allocated,
+    // block the edit — the allocations would become inconsistent.
+    if (Math.abs(newTotal - (Number(invoice.total) || 0)) > 0.005) {
+      var hasAllocations = getAll('BudgetAllocations').some(function(a) {
+        return a.invoice_id === invoice.invoice_id;
+      });
+      if (hasAllocations) {
+        throw new Error('This invoice is already allocated. Changing the total would desync the budget. Remove the allocation first, or edit before allocating.');
+      }
+    }
+
     invoice.gst_amount = gstAmount;
-    invoice.total = subtotal + gstAmount;
+    invoice.total = newTotal;
   }
 
   updateRow('Invoices', invoice._rowIndex, invoice);
