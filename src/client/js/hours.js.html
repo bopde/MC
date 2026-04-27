@@ -1,15 +1,13 @@
 <script>
 /**
  * Hours & Expenses module.
- * - Tab bar: Time Entries | Expenses
- * - Forms for adding new entries
- * - Filtered list views
+ * Optimized for quick mobile entry — minimal taps to log time.
  */
 
 function renderHoursPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="hours-tabs">' +
-      '<button class="active" onclick="showHoursTab(\'time\')">Time Entries</button>' +
+      '<button class="active" onclick="showHoursTab(\'time\')">Time</button>' +
       '<button onclick="showHoursTab(\'expenses\')">Expenses</button>' +
     '</div>' +
     '<div id="hours-tab-content"></div>';
@@ -22,12 +20,8 @@ function showHoursTab(tab) {
   btns.forEach(function(btn, i) {
     btn.classList.toggle('active', (tab === 'time' && i === 0) || (tab === 'expenses' && i === 1));
   });
-
-  if (tab === 'time') {
-    renderTimeEntryTab();
-  } else {
-    renderExpenseTab();
-  }
+  if (tab === 'time') renderTimeEntryTab();
+  else renderExpenseTab();
 }
 
 function renderTimeEntryTab() {
@@ -35,39 +29,46 @@ function renderTimeEntryTab() {
   var codes = AppCache.workCodes || [];
   var content = document.getElementById('hours-tab-content');
 
+  // Auto-select if only one option
+  var bizSelected = businesses.length === 1 ? businesses[0].business_id : '';
+  var codeSelected = codes.length === 1 ? codes[0].code_id : '';
+  var defaultRate = '';
+  if (bizSelected) {
+    var biz = businesses.find(function(b) { return b.business_id === bizSelected; });
+    if (biz && biz.default_rate) defaultRate = biz.default_rate;
+  }
+
   content.innerHTML =
-    '<details open><summary><strong>Add Time Entry</strong></summary>' +
     '<form id="time-entry-form" onsubmit="submitTimeEntry(event)">' +
       '<div class="form-row">' +
-        '<label>Business ' + buildSelect('te-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
+        '<label>Business ' + buildSelect('te-business', businesses, 'business_id', 'name', { required: true, selected: bizSelected, placeholder: businesses.length === 1 ? false : 'Select...' }) + '</label>' +
         '<label>Date <input type="date" id="te-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Start Time <input type="time" id="te-start" required></label>' +
-        '<label>End Time <input type="time" id="te-end" required></label>' +
-        '<label>Work Code ' + buildCodeSelect('te-code', codes, { required: true }) + '</label>' +
+        '<label>Start <input type="time" id="te-start" required></label>' +
+        '<label>End <input type="time" id="te-end" required></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Rate (per hr) <input type="number" id="te-rate" step="0.01" required></label>' +
-        '<label>Description <input type="text" id="te-desc" placeholder="What did you work on?"></label>' +
+        '<label>Code ' + buildCodeSelect('te-code', codes, { required: true, selected: codeSelected, placeholder: codes.length === 1 ? false : 'Select...' }) + '</label>' +
+        '<label>Rate <input type="number" id="te-rate" step="0.01" required value="' + defaultRate + '"></label>' +
       '</div>' +
+      '<label>Description <input type="text" id="te-desc" placeholder="What did you work on?"></label>' +
       '<div class="form-actions">' +
-        '<button type="submit">Add Entry</button>' +
+        '<button type="submit" class="btn-primary">Add entry</button>' +
       '</div>' +
-    '</form></details>' +
+    '</form>' +
 
-    '<section>' +
-      '<h3>Recent Entries</h3>' +
-      '<div class="filters no-print">' +
+    '<section style="margin-top:1.25rem;">' +
+      '<div class="filters">' +
         '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All' }) + '</label>' +
         '<label>From <input type="date" id="te-filter-from"></label>' +
         '<label>To <input type="date" id="te-filter-to"></label>' +
-        '<button onclick="filterTimeEntries()">Filter</button>' +
+        '<button class="btn-subtle" onclick="filterTimeEntries()">Filter</button>' +
       '</div>' +
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
     '</section>';
 
-  // Auto-fill rate when business is selected
+  // Auto-fill rate when business changes
   document.getElementById('te-business').addEventListener('change', function() {
     var bizId = this.value;
     var biz = businesses.find(function(b) { return b.business_id === bizId; });
@@ -90,27 +91,26 @@ function filterTimeEntries() {
     renderTimeEntriesTable(entries);
   }).catch(function(err) {
     document.getElementById('time-entries-list').innerHTML =
-      '<p>Error: ' + escapeHtml(err.message) + '</p>';
+      '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
 function renderTimeEntriesTable(entries) {
   var el = document.getElementById('time-entries-list');
   if (!entries || entries.length === 0) {
-    el.innerHTML = '<p>No time entries found.</p>';
+    el.innerHTML = '<p class="muted">No time entries found.</p>';
     return;
   }
 
-  // Sort by date descending
   entries.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
 
   var totalHours = entries.reduce(function(s, e) { return s + (Number(e.hours) || 0); }, 0);
   var totalAmount = entries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0);
 
-  var html = '<table><thead><tr>' +
-    '<th>Date</th><th>Business</th><th>Code</th><th>Start</th><th>End</th>' +
-    '<th class="number">Hours</th><th>Description</th><th class="number">Rate</th>' +
-    '<th class="number">Total</th><th>Invoiced</th>' +
+  var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
+    '<th>Date</th><th>Business</th><th>Code</th>' +
+    '<th class="number">Hrs</th><th>Description</th>' +
+    '<th class="number">Amount</th><th>Inv</th>' +
     '</tr></thead><tbody>';
 
   entries.forEach(function(e) {
@@ -124,22 +124,19 @@ function renderTimeEntriesTable(entries) {
       '<td>' + formatDate(e.date) + '</td>' +
       '<td>' + escapeHtml(bizName) + '</td>' +
       '<td>' + escapeHtml(e.work_code) + '</td>' +
-      '<td>' + escapeHtml(e.time_start) + '</td>' +
-      '<td>' + escapeHtml(e.time_end) + '</td>' +
-      '<td class="number">' + (Number(e.hours) || 0).toFixed(2) + '</td>' +
+      '<td class="number">' + (Number(e.hours) || 0).toFixed(1) + '</td>' +
       '<td>' + escapeHtml(e.description) + '</td>' +
-      '<td class="number">' + formatCurrency(e.rate, currency) + '</td>' +
       '<td class="number">' + formatCurrency(e.line_total, currency) + '</td>' +
       '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
       '</tr>';
   });
 
   html += '</tbody><tfoot><tr>' +
-    '<td colspan="5"><strong>Totals</strong></td>' +
-    '<td class="number"><strong>' + totalHours.toFixed(2) + '</strong></td>' +
-    '<td colspan="2"></td>' +
+    '<td colspan="3"><strong>Total</strong></td>' +
+    '<td class="number"><strong>' + totalHours.toFixed(1) + '</strong></td>' +
+    '<td></td>' +
     '<td class="number"><strong>' + formatCurrency(totalAmount) + '</strong></td>' +
-    '<td></td></tr></tfoot></table>';
+    '<td></td></tr></tfoot></table></div>';
 
   el.innerHTML = html;
 }
@@ -160,9 +157,9 @@ function submitTimeEntry(event) {
   btn.setAttribute('aria-busy', 'true');
 
   serverCall('addTimeEntry', data).then(function() {
-    showToast('Time entry added!');
-    // Reset time fields but keep date/business/rate
-    document.getElementById('te-start').value = '';
+    showToast('Entry added');
+    // Keep date/business/rate/code, clear times + desc for quick re-entry
+    document.getElementById('te-start').value = data.time_end; // next entry starts where this one ended
     document.getElementById('te-end').value = '';
     document.getElementById('te-desc').value = '';
     filterTimeEntries();
@@ -173,32 +170,32 @@ function submitTimeEntry(event) {
   });
 }
 
-// --- Expenses Tab ---
+// --- Expenses ---
 
 function renderExpenseTab() {
   var businesses = AppCache.businesses || [];
   var codes = AppCache.workCodes || [];
   var content = document.getElementById('hours-tab-content');
 
+  var bizSelected = businesses.length === 1 ? businesses[0].business_id : '';
+
   content.innerHTML =
-    '<details open><summary><strong>Add Expense</strong></summary>' +
     '<form id="expense-form" onsubmit="submitExpense(event)">' +
       '<div class="form-row">' +
-        '<label>Business ' + buildSelect('exp-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
+        '<label>Business ' + buildSelect('exp-business', businesses, 'business_id', 'name', { required: true, selected: bizSelected, placeholder: businesses.length === 1 ? false : 'Select...' }) + '</label>' +
         '<label>Date <input type="date" id="exp-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
         '<label>Amount <input type="number" id="exp-amount" step="0.01" required></label>' +
-        '<label>For <input type="text" id="exp-desc" placeholder="What was this expense for?" required></label>' +
-        '<label>Work Code ' + buildCodeSelect('exp-code', codes, { required: true }) + '</label>' +
+        '<label>Code ' + buildCodeSelect('exp-code', codes, { required: true }) + '</label>' +
       '</div>' +
+      '<label>What for <input type="text" id="exp-desc" placeholder="Description" required></label>' +
       '<div class="form-actions">' +
-        '<button type="submit">Add Expense</button>' +
+        '<button type="submit" class="btn-primary">Add expense</button>' +
       '</div>' +
-    '</form></details>' +
+    '</form>' +
 
-    '<section>' +
-      '<h3>Recent Expenses</h3>' +
+    '<section style="margin-top:1.25rem;">' +
       '<div id="expenses-list" aria-busy="true">Loading...</div>' +
     '</section>';
 
@@ -209,16 +206,16 @@ function loadExpenses() {
   serverCall('getExpenses', {}).then(function(expenses) {
     var el = document.getElementById('expenses-list');
     if (!expenses || expenses.length === 0) {
-      el.innerHTML = '<p>No expenses found.</p>';
+      el.innerHTML = '<p class="muted">No expenses yet.</p>';
       return;
     }
 
     expenses.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
     var total = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
 
-    var html = '<table><thead><tr>' +
-      '<th>Date</th><th>Business</th><th>Code</th><th>For</th>' +
-      '<th class="number">Amount</th><th>Invoiced</th>' +
+    var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
+      '<th>Date</th><th>Business</th><th>What</th>' +
+      '<th class="number">Amount</th><th>Inv</th>' +
       '</tr></thead><tbody>';
 
     expenses.forEach(function(e) {
@@ -231,21 +228,20 @@ function loadExpenses() {
       html += '<tr>' +
         '<td>' + formatDate(e.date) + '</td>' +
         '<td>' + escapeHtml(bizName) + '</td>' +
-        '<td>' + escapeHtml(e.work_code) + '</td>' +
         '<td>' + escapeHtml(e.description) + '</td>' +
         '<td class="number">' + formatCurrency(e.amount, currency) + '</td>' +
         '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
         '</tr>';
     });
 
-    html += '</tbody><tfoot><tr><td colspan="4"><strong>Total</strong></td>' +
+    html += '</tbody><tfoot><tr><td colspan="3"><strong>Total</strong></td>' +
       '<td class="number"><strong>' + formatCurrency(total) + '</strong></td>' +
-      '<td></td></tr></tfoot></table>';
+      '<td></td></tr></tfoot></table></div>';
 
     el.innerHTML = html;
   }).catch(function(err) {
     document.getElementById('expenses-list').innerHTML =
-      '<p>Error: ' + escapeHtml(err.message) + '</p>';
+      '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -263,7 +259,7 @@ function submitExpense(event) {
   btn.setAttribute('aria-busy', 'true');
 
   serverCall('addExpense', data).then(function() {
-    showToast('Expense added!');
+    showToast('Expense added');
     document.getElementById('exp-amount').value = '';
     document.getElementById('exp-desc').value = '';
     loadExpenses();

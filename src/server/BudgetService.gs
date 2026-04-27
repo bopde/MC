@@ -46,9 +46,16 @@ function allocateBudget(invoiceId, ruleId, taxAlreadyWithheld) {
   if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
   var total = Number(invoice.total) || 0;
-  var withheld = Number(taxAlreadyWithheld) || 0;
-  var netToAllocate = total - withheld;
   var today = new Date().toISOString().split('T')[0];
+
+  // Derive withheld amount from rule percentages (applied to gross).
+  var withheldFromRule = 0;
+  BUDGET_CATEGORIES.forEach(function(cat, i) {
+    if (WITHHELD_CATEGORIES.indexOf(cat) !== -1) {
+      withheldFromRule += Math.round(total * (Number(rule[BUDGET_PCT_FIELDS[i]]) || 0) * 100) / 100;
+    }
+  });
+  var netToAllocate = total - withheldFromRule;
 
   var allocations = [];
   BUDGET_CATEGORIES.forEach(function(cat, i) {
