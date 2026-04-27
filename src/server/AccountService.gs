@@ -43,6 +43,8 @@ function saveAccountSummary(data) {
     realised_gains: Number(data.realised_gains) || 0,
     unrealised_gains: Number(data.unrealised_gains) || 0,
     tax_paid: Number(data.tax_paid) || 0,
+    total_in: Number(data.total_in) || 0,
+    total_out: Number(data.total_out) || 0,
     notes: data.notes || ''
   };
 

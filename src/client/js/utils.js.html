@@ -279,6 +279,21 @@ function yearEnd(year) {
 }
 
 /**
+ * Format a time value for display. Handles HH:MM strings, ISO datetimes, and Date objects.
+ */
+function formatTime(val) {
+  if (!val) return '';
+  var str = String(val);
+  if (/^\d{1,2}:\d{2}$/.test(str)) return str;
+  var m = str.match(/T(\d{2}:\d{2})/);
+  if (m) return m[1];
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return String(val.getHours()).padStart(2, '0') + ':' + String(val.getMinutes()).padStart(2, '0');
+  }
+  return str;
+}
+
+/**
  * Add hours to a time string (HH:MM), returns HH:MM.
  */
 function addHoursToTime(timeStr, hours) {

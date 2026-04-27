@@ -60,7 +60,8 @@ function setupSheets() {
     ],
     'AccountSummaries': [
       'summary_id', 'account_id', 'month', 'ending_balance',
-      'realised_gains', 'unrealised_gains', 'tax_paid', 'notes'
+      'realised_gains', 'unrealised_gains', 'tax_paid',
+      'total_in', 'total_out', 'notes'
     ]
   };
 

@@ -5,6 +5,7 @@
  */
 
 var _loadedTimeEntries = [];
+var _loadedExpenses = [];
 
 function renderHoursPage(container) {
   container.innerHTML =
@@ -162,7 +163,7 @@ function renderTimeEntriesTable(entries) {
   var totalAmount = entries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0);
 
   var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
-    '<th>Date</th><th>Business</th><th>Code</th>' +
+    '<th>Date</th><th>Business</th><th>Start</th><th>End</th><th>Code</th>' +
     '<th class="number">Hrs</th><th>Description</th>' +
     '<th class="number">Amount</th><th>Inv</th>' +
     '</tr></thead><tbody>';
@@ -177,6 +178,8 @@ function renderTimeEntriesTable(entries) {
     html += '<tr>' +
       '<td>' + formatDate(e.date) + '</td>' +
       '<td>' + escapeHtml(bizName) + '</td>' +
+      '<td>' + formatTime(e.time_start) + '</td>' +
+      '<td>' + formatTime(e.time_end) + '</td>' +
       '<td>' + escapeHtml(e.work_code) + '</td>' +
       '<td class="number">' + (Number(e.hours) || 0).toFixed(1) + '</td>' +
       '<td>' + escapeHtml(e.description) + '</td>' +
@@ -186,7 +189,7 @@ function renderTimeEntriesTable(entries) {
   });
 
   html += '</tbody><tfoot><tr>' +
-    '<td colspan="3"><strong>Total</strong></td>' +
+    '<td colspan="5"><strong>Total</strong></td>' +
     '<td class="number"><strong>' + totalHours.toFixed(1) + '</strong></td>' +
     '<td></td>' +
     '<td class="number"><strong>' + formatCurrency(totalAmount) + '</strong></td>' +
@@ -210,12 +213,14 @@ function submitTimeEntry(event) {
   var btn = event.target.querySelector('button[type="submit"]');
   btn.setAttribute('aria-busy', 'true');
 
-  serverCall('addTimeEntry', data).then(function() {
+  serverCall('addTimeEntry', data).then(function(newEntry) {
     showToast('Entry added');
     document.getElementById('te-start').value = data.time_end;
     document.getElementById('te-end').value = addHoursToTime(data.time_end, 1);
     document.getElementById('te-desc').value = '';
-    filterTimeEntries();
+    _loadedTimeEntries.push(newEntry);
+    renderTimeEntriesTable(_loadedTimeEntries);
+    updateTimeAutofill(_loadedTimeEntries);
   }).catch(function(err) {
     showToast(err.message, 'error');
   }).finally(function() {
@@ -269,45 +274,50 @@ function loadExpenses() {
   };
 
   serverCall('getExpenses', filters).then(function(expenses) {
-    var el = document.getElementById('expenses-list');
-    if (!expenses || expenses.length === 0) {
-      el.innerHTML = '<p class="muted">No expenses found.</p>';
-      return;
-    }
-
-    expenses.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
-    var total = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
-
-    var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
-      '<th>Date</th><th>Business</th><th>What</th>' +
-      '<th class="number">Amount</th><th>Inv</th>' +
-      '</tr></thead><tbody>';
-
-    expenses.forEach(function(e) {
-      var bizName = '';
-      var currency = 'NZD';
-      if (AppCache.businesses) {
-        var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
-        if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
-      }
-      html += '<tr>' +
-        '<td>' + formatDate(e.date) + '</td>' +
-        '<td>' + escapeHtml(bizName) + '</td>' +
-        '<td>' + escapeHtml(e.description) + '</td>' +
-        '<td class="number">' + formatCurrency(e.amount, currency) + '</td>' +
-        '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
-        '</tr>';
-    });
-
-    html += '</tbody><tfoot><tr><td colspan="3"><strong>Total</strong></td>' +
-      '<td class="number"><strong>' + formatCurrency(total) + '</strong></td>' +
-      '<td></td></tr></tfoot></table></div>';
-
-    el.innerHTML = html;
+    _loadedExpenses = expenses || [];
+    renderExpensesTable(_loadedExpenses);
   }).catch(function(err) {
     document.getElementById('expenses-list').innerHTML =
       '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
+}
+
+function renderExpensesTable(expenses) {
+  var el = document.getElementById('expenses-list');
+  if (!expenses || expenses.length === 0) {
+    el.innerHTML = '<p class="muted">No expenses found.</p>';
+    return;
+  }
+
+  expenses.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  var total = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+
+  var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
+    '<th>Date</th><th>Business</th><th>What</th>' +
+    '<th class="number">Amount</th><th>Inv</th>' +
+    '</tr></thead><tbody>';
+
+  expenses.forEach(function(e) {
+    var bizName = '';
+    var currency = 'NZD';
+    if (AppCache.businesses) {
+      var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
+      if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
+    }
+    html += '<tr>' +
+      '<td>' + formatDate(e.date) + '</td>' +
+      '<td>' + escapeHtml(bizName) + '</td>' +
+      '<td>' + escapeHtml(e.description) + '</td>' +
+      '<td class="number">' + formatCurrency(e.amount, currency) + '</td>' +
+      '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody><tfoot><tr><td colspan="3"><strong>Total</strong></td>' +
+    '<td class="number"><strong>' + formatCurrency(total) + '</strong></td>' +
+    '<td></td></tr></tfoot></table></div>';
+
+  el.innerHTML = html;
 }
 
 function submitExpense(event) {
@@ -323,11 +333,12 @@ function submitExpense(event) {
   var btn = event.target.querySelector('button[type="submit"]');
   btn.setAttribute('aria-busy', 'true');
 
-  serverCall('addExpense', data).then(function() {
+  serverCall('addExpense', data).then(function(newExpense) {
     showToast('Expense added');
     document.getElementById('exp-amount').value = '';
     document.getElementById('exp-desc').value = '';
-    loadExpenses();
+    _loadedExpenses.push(newExpense);
+    renderExpensesTable(_loadedExpenses);
   }).catch(function(err) {
     showToast(err.message, 'error');
   }).finally(function() {

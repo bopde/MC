@@ -162,7 +162,8 @@ function submitBusiness(event) {
 
   serverCall('addBusiness', data).then(function() {
     showToast('Business added!');
-    refreshReferenceData().then(renderBusinessSettings);
+    loadReferenceData();
+    renderBusinessSettings();
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
@@ -171,7 +172,8 @@ function submitBusiness(event) {
 function toggleBusiness(rowIndex, active) {
   serverCall('toggleEntityFromClient', 'Businesses|' + rowIndex + '|' + active).then(function() {
     showToast(active ? 'Business activated!' : 'Business deactivated!');
-    refreshReferenceData().then(renderBusinessSettings);
+    loadReferenceData();
+    renderBusinessSettings();
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -228,7 +230,8 @@ function submitWorkCode(event) {
 
   serverCall('addWorkCode', data).then(function() {
     showToast('Work code added!');
-    refreshReferenceData().then(renderCodeSettings);
+    loadReferenceData();
+    renderCodeSettings();
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
@@ -237,7 +240,8 @@ function submitWorkCode(event) {
 function toggleCode(rowIndex, active) {
   serverCall('toggleEntityFromClient', 'WorkCodes|' + rowIndex + '|' + active).then(function() {
     showToast(active ? 'Code activated!' : 'Code deactivated!');
-    refreshReferenceData().then(renderCodeSettings);
+    loadReferenceData();
+    renderCodeSettings();
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -313,7 +317,8 @@ function submitAccount(event) {
 
   serverCall('addAccount', data).then(function() {
     showToast('Account added!');
-    refreshReferenceData().then(renderAccountSettings);
+    loadReferenceData();
+    renderAccountSettings();
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
@@ -322,7 +327,8 @@ function submitAccount(event) {
 function toggleAccount(rowIndex, active) {
   serverCall('toggleEntityFromClient', 'Accounts|' + rowIndex + '|' + active).then(function() {
     showToast(active ? 'Account activated!' : 'Account deactivated!');
-    refreshReferenceData().then(renderAccountSettings);
+    loadReferenceData();
+    renderAccountSettings();
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -406,17 +412,24 @@ function renderRuleSettings() {
 }
 
 function updateRuleSum() {
-  var ids = ['br-tax-withheld', 'br-tax-to-pay', 'br-acc-withheld', 'br-acc-to-pay',
-             'br-donate', 'br-save', 'br-invest', 'br-spend'];
-  var sum = ids.reduce(function(s, id) {
+  var withheldIds = ['br-tax-withheld', 'br-acc-withheld'];
+  var netIds = ['br-tax-to-pay', 'br-acc-to-pay', 'br-donate', 'br-save', 'br-invest', 'br-spend'];
+
+  var withheldSum = withheldIds.reduce(function(s, id) {
+    return s + (Number(document.getElementById(id).value) || 0);
+  }, 0);
+  var netSum = netIds.reduce(function(s, id) {
     return s + (Number(document.getElementById(id).value) || 0);
   }, 0);
 
   var display = document.getElementById('br-sum-display');
   if (display) {
-    var pct = (sum * 100).toFixed(1);
-    display.textContent = 'Total: ' + pct + '%';
-    display.style.color = Math.abs(sum - 1.0) < 0.001 ? 'green' : 'red';
+    var netOk = Math.abs(netSum - 1.0) < 0.001;
+    display.innerHTML =
+      'Withheld (from gross): ' + (withheldSum * 100).toFixed(1) + '% &nbsp; ' +
+      'Remaining (from net): <strong style="color:' + (netOk ? 'var(--sage)' : 'var(--danger)') + '">' +
+      (netSum * 100).toFixed(1) + '%</strong>' +
+      (netOk ? '' : ' <span style="color:var(--danger)">&mdash; must equal 100%</span>');
   }
 }
 
@@ -438,7 +451,8 @@ function submitBudgetRule(event) {
 
   serverCall('addBudgetRule', data).then(function() {
     showToast('Budget rule added!');
-    refreshReferenceData().then(renderRuleSettings);
+    loadReferenceData();
+    renderRuleSettings();
   }).catch(function(err) {
     showToast(err.message, 'error');
   });

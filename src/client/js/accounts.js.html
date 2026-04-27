@@ -75,47 +75,44 @@ function loadMonthlySummaries() {
       return;
     }
 
+    function prevHint(prev, field, cur) {
+      var v = prev[field];
+      if (v == null || v === '') return '';
+      return '<div class="muted small">last: ' + formatCurrency(Number(v), cur) + '</div>';
+    }
+    function inputVal(s, field) {
+      return (s[field] != null && s[field] !== '') ? s[field] : '';
+    }
+
     var html =
-      '<article>' +
-        '<header><h3 style="margin:0;">Balances for ' + formatMonth(month) + '</h3>' +
-        '<p class="muted" style="margin:0.25rem 0 0;">Enter end-of-month balances. Last month shown for reference.</p></header>' +
-        '<form id="monthly-form" onsubmit="saveMonthlySummaries(event)">' +
-          '<div class="scroll-x">' +
-          '<table class="data-table">' +
-          '<thead><tr>' +
-            '<th>Account</th><th>Type</th><th>Currency</th>' +
-            '<th class="number">Last month</th>' +
-            '<th class="number">Ending balance</th>' +
-            '<th class="number">Realised gains</th>' +
-            '<th class="number">Unrealised gains</th>' +
-            '<th class="number">Tax paid</th>' +
-            '<th>Notes</th>' +
-          '</tr></thead><tbody>';
+      '<form id="monthly-form" onsubmit="saveMonthlySummaries(event)">';
 
     accounts.forEach(function(acc) {
       var s = summaryMap[acc.account_id] || {};
       var prev = prevMap[acc.account_id] || {};
-      var prevBal = (prev.ending_balance != null && prev.ending_balance !== '') ? Number(prev.ending_balance) : null;
       var cur = acc.currency || 'NZD';
 
-      html += '<tr data-account-id="' + acc.account_id + '">' +
-        '<td><strong>' + escapeHtml(acc.name) + '</strong></td>' +
-        '<td class="muted">' + escapeHtml(acc.type) + '</td>' +
-        '<td class="muted">' + escapeHtml(cur) + '</td>' +
-        '<td class="number muted">' + (prevBal !== null ? formatCurrency(prevBal, cur) : '—') + '</td>' +
-        '<td><input type="number" step="0.01" class="as-balance" value="' + (s.ending_balance != null && s.ending_balance !== '' ? s.ending_balance : '') + '"></td>' +
-        '<td><input type="number" step="0.01" class="as-realised" value="' + (s.realised_gains != null && s.realised_gains !== '' ? s.realised_gains : '') + '"></td>' +
-        '<td><input type="number" step="0.01" class="as-unrealised" value="' + (s.unrealised_gains != null && s.unrealised_gains !== '' ? s.unrealised_gains : '') + '"></td>' +
-        '<td><input type="number" step="0.01" class="as-tax" value="' + (s.tax_paid != null && s.tax_paid !== '' ? s.tax_paid : '') + '"></td>' +
-        '<td><input type="text" class="as-notes" value="' + escapeHtml(s.notes || '') + '"></td>' +
-        '</tr>';
+      html += '<article class="account-entry-card" data-account-id="' + acc.account_id + '">' +
+        '<header><h4 style="margin:0;">' + escapeHtml(acc.name) + '</h4>' +
+        '<span class="muted small">' + escapeHtml(acc.type) + ' · ' + escapeHtml(cur) + '</span></header>' +
+        '<div class="form-row">' +
+          '<label>Balance <input type="number" step="0.01" class="as-balance" value="' + inputVal(s, 'ending_balance') + '">' + prevHint(prev, 'ending_balance', cur) + '</label>' +
+          '<label>Realised gains <input type="number" step="0.01" class="as-realised" value="' + inputVal(s, 'realised_gains') + '">' + prevHint(prev, 'realised_gains', cur) + '</label>' +
+          '<label>Unrealised gains <input type="number" step="0.01" class="as-unrealised" value="' + inputVal(s, 'unrealised_gains') + '">' + prevHint(prev, 'unrealised_gains', cur) + '</label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Tax paid <input type="number" step="0.01" class="as-tax" value="' + inputVal(s, 'tax_paid') + '">' + prevHint(prev, 'tax_paid', cur) + '</label>' +
+          '<label>Total in <input type="number" step="0.01" class="as-total-in" value="' + inputVal(s, 'total_in') + '">' + prevHint(prev, 'total_in', cur) + '</label>' +
+          '<label>Total out <input type="number" step="0.01" class="as-total-out" value="' + inputVal(s, 'total_out') + '">' + prevHint(prev, 'total_out', cur) + '</label>' +
+        '</div>' +
+        '<label>Notes <input type="text" class="as-notes" value="' + escapeHtml(s.notes || '') + '"></label>' +
+      '</article>';
     });
 
-    html += '</tbody></table></div>' +
-      '<div class="form-actions">' +
+    html += '<div class="form-actions">' +
         '<button type="submit">Save all</button>' +
         '<span class="muted" id="save-status"></span>' +
-      '</div></form></article>';
+      '</div></form>';
 
     el.innerHTML = html;
   }).catch(function(err) {
@@ -126,28 +123,31 @@ function loadMonthlySummaries() {
 function saveMonthlySummaries(event) {
   event.preventDefault();
   var month = normalizeMonth(document.getElementById('as-month').value);
-  var rows = document.querySelectorAll('#monthly-form tbody tr');
+  var cards = document.querySelectorAll('#monthly-form .account-entry-card');
   var promises = [];
   var saving = 0;
 
-  rows.forEach(function(row) {
-    var balance = row.querySelector('.as-balance').value;
-    var realised = row.querySelector('.as-realised').value;
-    var unrealised = row.querySelector('.as-unrealised').value;
-    var tax = row.querySelector('.as-tax').value;
-    var notes = row.querySelector('.as-notes').value;
+  cards.forEach(function(card) {
+    var balance = card.querySelector('.as-balance').value;
+    var realised = card.querySelector('.as-realised').value;
+    var unrealised = card.querySelector('.as-unrealised').value;
+    var tax = card.querySelector('.as-tax').value;
+    var totalIn = card.querySelector('.as-total-in').value;
+    var totalOut = card.querySelector('.as-total-out').value;
+    var notes = card.querySelector('.as-notes').value;
 
-    // Skip rows with no data at all
-    if (balance === '' && realised === '' && unrealised === '' && tax === '' && !notes) return;
+    if (balance === '' && realised === '' && unrealised === '' && tax === '' && totalIn === '' && totalOut === '' && !notes) return;
 
     saving++;
     promises.push(serverCall('saveAccountSummary', {
-      account_id: row.dataset.accountId,
+      account_id: card.dataset.accountId,
       month: month,
       ending_balance: balance || 0,
       realised_gains: realised || 0,
       unrealised_gains: unrealised || 0,
       tax_paid: tax || 0,
+      total_in: totalIn || 0,
+      total_out: totalOut || 0,
       notes: notes || ''
     }));
   });

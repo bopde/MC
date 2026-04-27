@@ -214,16 +214,19 @@ function getBudgetSummary(year) {
 }
 
 /**
- * Validate that a budget rule's percentages sum to 1.0 (100%).
+ * Validate budget rule: non-withheld categories must sum to 100% of net.
+ * Withheld categories are taken from gross separately.
  */
 function validateBudgetRule(rule) {
-  var sum = 0;
-  BUDGET_PCT_FIELDS.forEach(function(field) {
-    sum += Number(rule[field]) || 0;
+  var netSum = 0;
+  BUDGET_CATEGORIES.forEach(function(cat, i) {
+    if (WITHHELD_CATEGORIES.indexOf(cat) === -1) {
+      netSum += Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
+    }
   });
 
-  if (Math.abs(sum - 1.0) > 0.001) {
-    throw new Error('Budget rule percentages must sum to 100%. Current sum: ' + (sum * 100).toFixed(1) + '%');
+  if (Math.abs(netSum - 1.0) > 0.001) {
+    throw new Error('Non-withheld categories must sum to 100% of net. Current: ' + (netSum * 100).toFixed(1) + '%');
   }
   return true;
 }
