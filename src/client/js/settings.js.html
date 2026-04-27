@@ -94,7 +94,7 @@ function renderBusinessSettings() {
 
   serverCall('getAllBusinesses').then(function(businesses) {
     var html =
-      '<details><summary><strong>Add New Business</strong></summary>' +
+      '<details class="add-form-panel"><summary>+ Add New Business</summary><div>' +
       '<form id="add-biz-form" onsubmit="submitBusiness(event)">' +
         '<div class="form-row">' +
           '<label>Name <input type="text" id="biz-name" required></label>' +
@@ -113,7 +113,7 @@ function renderBusinessSettings() {
         '</div>' +
         '<label>Address <textarea id="biz-address" rows="2"></textarea></label>' +
         '<div class="form-actions"><button type="submit">Add Business</button></div>' +
-      '</form></details>';
+      '</form></div></details>';
 
     if (businesses.length > 0) {
       html += '<table><thead><tr>' +
@@ -183,7 +183,7 @@ function renderCodeSettings() {
 
   serverCall('getAll', 'WorkCodes').then(function(codes) {
     var html =
-      '<details><summary><strong>Add New Work Code</strong></summary>' +
+      '<details class="add-form-panel"><summary>+ Add New Work Code</summary><div>' +
       '<form id="add-code-form" onsubmit="submitWorkCode(event)">' +
         '<div class="form-row">' +
           '<label>Code ID <input type="text" id="wc-id" required placeholder="e.g. DEV, DESIGN, PM"></label>' +
@@ -191,7 +191,7 @@ function renderCodeSettings() {
           '<label>Category <select id="wc-cat"><option value="billable">Billable</option><option value="non-billable">Non-billable</option></select></label>' +
         '</div>' +
         '<div class="form-actions"><button type="submit">Add Code</button></div>' +
-      '</form></details>';
+      '</form></div></details>';
 
     if (codes.length > 0) {
       html += '<table><thead><tr><th>Code ID</th><th>Description</th><th>Category</th><th>Active</th></tr></thead><tbody>';
@@ -249,12 +249,13 @@ function renderAccountSettings() {
 
   serverCall('getAll', 'Accounts').then(function(accounts) {
     var html =
-      '<details><summary><strong>Add New Account</strong></summary>' +
+      '<details class="add-form-panel"><summary>+ Add New Account</summary><div>' +
       '<form id="add-acc-form" onsubmit="submitAccount(event)">' +
         '<div class="form-row">' +
           '<label>Name <input type="text" id="acc-name" required placeholder="e.g. ASB Chequing, Tax Hold"></label>' +
           '<label>Type <select id="acc-type">' +
             '<option value="bank">Bank</option>' +
+            '<option value="credit">Credit</option>' +
             '<option value="investment">Investment</option>' +
             '<option value="hold">Hold/Reserve</option>' +
             '<option value="crypto">Crypto</option>' +
@@ -272,7 +273,7 @@ function renderAccountSettings() {
           '<label>Purpose <input type="text" id="acc-purpose" placeholder="e.g. savings, tax, spending"></label>' +
         '</div>' +
         '<div class="form-actions"><button type="submit">Add Account</button></div>' +
-      '</form></details>';
+      '</form></div></details>';
 
     if (accounts.length > 0) {
       html += '<table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Currency</th><th>Purpose</th><th>Active</th></tr></thead><tbody>';
@@ -344,11 +345,15 @@ function renderRuleSettings() {
     ];
 
     var html =
-      '<details><summary><strong>Add New Budget Rule</strong></summary>' +
+      '<details class="add-form-panel"><summary>+ Add New Budget Rule</summary><div>' +
       '<form id="add-rule-form" onsubmit="submitBudgetRule(event)">' +
         '<div class="form-row">' +
           '<label>Rule Name <input type="text" id="br-name" required placeholder="e.g. Default Split"></label>' +
         '</div>' +
+        '<p class="muted" style="margin:0.5rem 0;font-size:0.82rem;">' +
+          '<strong>Withheld</strong> categories (Tax/ACC Withheld) apply to gross invoice total. ' +
+          'All other categories apply to net after withheld. Enter as decimals (e.g. 0.28 = 28%).' +
+        '</p>' +
         '<div class="form-row">';
 
     pctFields.forEach(function(f, i) {
@@ -363,7 +368,7 @@ function renderRuleSettings() {
         '</div>' +
         '<p id="br-sum-display" style="font-weight:600;"></p>' +
         '<div class="form-actions"><button type="submit">Add Rule</button></div>' +
-      '</form></details>';
+      '</form></div></details>';
 
     if (rules.length > 0) {
       html += '<table><thead><tr>' +

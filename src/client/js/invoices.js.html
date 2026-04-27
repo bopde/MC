@@ -31,11 +31,22 @@ function showInvoiceTab(tab) {
 
 function renderInvoiceList() {
   var content = document.getElementById('invoice-tab-content');
-  content.innerHTML = '<div aria-busy="true">Loading invoices...</div>';
+  var year = AppState.year;
 
-  serverCall('getInvoicesWithDetails').then(function(invoices) {
+  content.innerHTML =
+    '<div class="filters">' +
+      '<label>Year ' + buildYearSelect('inv-filter-year', year) + '</label>' +
+      '<button class="btn-subtle" onclick="renderInvoiceList()">Filter</button>' +
+    '</div>' +
+    '<div id="invoice-list-body" aria-busy="true">Loading invoices...</div>';
+
+  var yearEl = document.getElementById('inv-filter-year');
+  if (yearEl) { year = yearEl.value; AppState.year = year; }
+
+  serverCall('getInvoicesWithDetails', year).then(function(invoices) {
+    var body = document.getElementById('invoice-list-body');
     if (!invoices || invoices.length === 0) {
-      content.innerHTML = '<p class="muted">No invoices yet. Create one from the "Create Invoice" tab.</p>';
+      body.innerHTML = '<p class="muted">No invoices for ' + year + '. Create one from the "Create Invoice" tab.</p>';
       return;
     }
 
@@ -66,9 +77,10 @@ function renderInvoiceList() {
     });
 
     html += '</tbody></table></div>';
-    content.innerHTML = html;
+    body.innerHTML = html;
   }).catch(function(err) {
-    content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+    var body = document.getElementById('invoice-list-body');
+    if (body) body.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -121,10 +133,12 @@ function renderInvoiceDetail(data) {
   var content = document.getElementById('invoice-tab-content');
   var includeGst = inv.include_gst === true || inv.include_gst === 'true' || inv.include_gst === 'TRUE';
 
+  var canEdit = inv.status !== 'paid' && inv.status !== 'void';
+
   var html =
     '<div class="no-print invoice-toolbar">' +
       '<button class="btn-subtle" onclick="showInvoiceTab(\'list\')">&larr; Back</button> ' +
-      '<button class="btn-subtle" onclick="editInvoice(\'' + inv.invoice_id + '\')">Edit</button> ' +
+      (canEdit ? '<button class="btn-subtle" onclick="editInvoice(\'' + inv.invoice_id + '\')">Edit</button> ' : '') +
       '<button onclick="window.print()">Print / Save PDF</button>' +
     '</div>' +
 
@@ -173,11 +187,12 @@ function renderInvoiceDetail(data) {
       '</tr></thead><tbody>';
 
     data.codeGroups.forEach(function(group) {
-      var codeDesc = group.code;
-      if (AppCache.workCodes) {
+      var codeDesc = group.description || '';
+      if (!codeDesc && AppCache.workCodes) {
         var wc = AppCache.workCodes.find(function(c) { return c.code_id === group.code; });
         if (wc) codeDesc = wc.description;
       }
+      if (!codeDesc) codeDesc = group.code;
       html += '<tr>' +
         '<td>' + escapeHtml(group.code) + '</td>' +
         '<td>' + escapeHtml(codeDesc) + '</td>' +
@@ -269,7 +284,6 @@ function editInvoice(invoiceId) {
       '</div>' +
       '<article>' +
         '<h3>Edit Invoice ' + escapeHtml(invoiceId) + '</h3>' +
-        '<p class="muted">Line items come from time entries and expenses &mdash; edit those directly if needed, then regenerate. Here you can adjust the invoice metadata and GST.</p>' +
         '<form id="edit-invoice-form" onsubmit="submitInvoiceEdit(event, \'' + invoiceId + '\')">' +
           '<label>Description' +
             '<input type="text" id="edit-inv-desc" value="' + escapeHtml(inv.description || '') + '">' +
@@ -280,8 +294,25 @@ function editInvoice(invoiceId) {
           '<div class="form-row">' +
             '<label><input type="checkbox" id="edit-inv-gst"' + (includeGst ? ' checked' : '') + '> Include GST</label>' +
             '<label>GST Rate (%) <input type="number" id="edit-inv-gst-rate" step="0.01" value="' + (gstRate * 100).toFixed(2) + '" min="0" max="100"></label>' +
-          '</div>' +
-          '<div class="form-actions">' +
+          '</div>';
+
+    if (data.codeGroups && data.codeGroups.length > 0) {
+      html += '<h4 class="section-label">Line Item Descriptions</h4>' +
+        '<p class="muted" style="margin:0 0 0.5rem;font-size:0.82rem;">Override the default work code description for each line on this invoice.</p>';
+      data.codeGroups.forEach(function(group) {
+        var defaultDesc = '';
+        if (AppCache.workCodes) {
+          var wc = AppCache.workCodes.find(function(c) { return c.code_id === group.code; });
+          if (wc) defaultDesc = wc.description;
+        }
+        var currentDesc = group.description || '';
+        html += '<label>' + escapeHtml(group.code) + ' (' + group.totalHours.toFixed(1) + ' hrs)' +
+          '<input type="text" class="edit-line-desc" data-code="' + escapeHtml(group.code) + '" value="' + escapeHtml(currentDesc) + '" placeholder="' + escapeHtml(defaultDesc) + '">' +
+        '</label>';
+      });
+    }
+
+    html += '<div class="form-actions">' +
             '<button type="submit">Save Changes</button>' +
             '<button type="button" class="btn-subtle" onclick="viewInvoice(\'' + invoiceId + '\')">Cancel</button>' +
           '</div>' +
@@ -296,12 +327,20 @@ function editInvoice(invoiceId) {
 
 function submitInvoiceEdit(event, invoiceId) {
   event.preventDefault();
+  var lineDescs = {};
+  document.querySelectorAll('.edit-line-desc').forEach(function(input) {
+    if (input.value.trim()) {
+      lineDescs[input.dataset.code] = input.value.trim();
+    }
+  });
+
   var data = {
     invoice_id: invoiceId,
     description: document.getElementById('edit-inv-desc').value,
     notes: document.getElementById('edit-inv-notes').value,
     include_gst: document.getElementById('edit-inv-gst').checked,
-    gst_rate: Number(document.getElementById('edit-inv-gst-rate').value) / 100
+    gst_rate: Number(document.getElementById('edit-inv-gst-rate').value) / 100,
+    line_descriptions: lineDescs
   };
 
   serverCall('updateInvoice', data).then(function() {
@@ -397,9 +436,34 @@ function previewInvoice() {
     }
     html += ' &nbsp; <strong>Total:</strong> ' + formatCurrency(subtotal + gst, currency) + '</div>';
 
+    // Collect unique work codes for line description overrides
+    var codeSet = {};
+    items.timeEntries.forEach(function(te) {
+      if (!codeSet[te.work_code]) {
+        var desc = te.work_code;
+        if (AppCache.workCodes) {
+          var wc = AppCache.workCodes.find(function(c) { return c.code_id === te.work_code; });
+          if (wc) desc = wc.description;
+        }
+        codeSet[te.work_code] = desc;
+      }
+    });
+
     html += '<div class="form-stack">' +
-      '<label>Invoice Description <input type="text" id="inv-desc" placeholder="Optional description"></label>' +
-      '<label>Notes <textarea id="inv-notes" rows="2" placeholder="Additional notes"></textarea></label>' +
+      '<label>Invoice Description <input type="text" id="inv-desc" placeholder="Optional description"></label>';
+
+    var codes = Object.keys(codeSet);
+    if (codes.length > 0) {
+      html += '<h4 class="section-label">Line Item Descriptions</h4>' +
+        '<p class="muted" style="margin:0 0 0.5rem;font-size:0.82rem;">Optionally override the description shown on the invoice for each work code.</p>';
+      codes.forEach(function(code) {
+        html += '<label>' + escapeHtml(code) +
+          ' <input type="text" class="create-line-desc" data-code="' + escapeHtml(code) + '" placeholder="' + escapeHtml(codeSet[code]) + '">' +
+        '</label>';
+      });
+    }
+
+    html += '<label>Notes <textarea id="inv-notes" rows="2" placeholder="Additional notes"></textarea></label>' +
       '<div class="form-actions">' +
         '<button onclick="confirmCreateInvoice()">Create Invoice</button>' +
         '<button class="btn-subtle" onclick="renderCreateInvoice()">Cancel</button>' +
@@ -412,6 +476,13 @@ function previewInvoice() {
 }
 
 function confirmCreateInvoice() {
+  var lineDescs = {};
+  document.querySelectorAll('.create-line-desc').forEach(function(input) {
+    if (input.value.trim()) {
+      lineDescs[input.dataset.code] = input.value.trim();
+    }
+  });
+
   var params = {
     businessId: document.getElementById('inv-business').value,
     dateFrom: document.getElementById('inv-from').value,
@@ -419,7 +490,8 @@ function confirmCreateInvoice() {
     includeGst: document.getElementById('inv-gst').checked,
     gstRate: Number(document.getElementById('inv-gst-rate').value) / 100,
     description: document.getElementById('inv-desc').value,
-    notes: document.getElementById('inv-notes').value
+    notes: document.getElementById('inv-notes').value,
+    lineDescriptions: Object.keys(lineDescs).length > 0 ? lineDescs : undefined
   };
 
   if (!confirm('Create this invoice? Time entries and expenses will be marked as invoiced.')) return;

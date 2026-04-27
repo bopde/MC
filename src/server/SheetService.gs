@@ -115,6 +115,39 @@ function valueExists(sheetName, column, value) {
 }
 
 /**
+ * Get rows filtered by a date column's year. Filters server-side to reduce
+ * payload across the google.script.run bridge (critical at 10k+ rows).
+ */
+function getByYear(sheetName, dateColumn, year) {
+  var yearStr = String(year);
+  return getAll(sheetName).filter(function(row) {
+    var val = row[dateColumn];
+    if (!val) return false;
+    return String(val).indexOf(yearStr) === 0;
+  });
+}
+
+/**
+ * Get rows filtered by a date column within a from/to range.
+ */
+function getByDateRange(sheetName, dateColumn, dateFrom, dateTo) {
+  var rows = getAll(sheetName);
+  var from = dateFrom ? new Date(dateFrom) : null;
+  var to = dateTo ? new Date(dateTo) : null;
+  if (to) to.setHours(23, 59, 59);
+
+  return rows.filter(function(row) {
+    var val = row[dateColumn];
+    if (!val) return false;
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+}
+
+/**
  * Find the column index (1-based) for a given header name in a sheet.
  */
 function getColumnIndex(sheet, headerName) {

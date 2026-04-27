@@ -4,6 +4,8 @@
  * Optimized for quick mobile entry — minimal taps to log time.
  */
 
+var _loadedTimeEntries = [];
+
 function renderHoursPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="hours-tabs">' +
@@ -29,7 +31,6 @@ function renderTimeEntryTab() {
   var codes = AppCache.workCodes || [];
   var content = document.getElementById('hours-tab-content');
 
-  // Auto-select if only one option
   var bizSelected = businesses.length === 1 ? businesses[0].business_id : '';
   var codeSelected = codes.length === 1 ? codes[0].code_id : '';
   var defaultRate = '';
@@ -45,8 +46,8 @@ function renderTimeEntryTab() {
         '<label>Date <input type="date" id="te-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Start <input type="time" id="te-start" required></label>' +
-        '<label>End <input type="time" id="te-end" required></label>' +
+        '<label>Start <input type="time" id="te-start" required value="09:00"></label>' +
+        '<label>End <input type="time" id="te-end" required value="10:00"></label>' +
       '</div>' +
       '<div class="form-row">' +
         '<label>Code ' + buildCodeSelect('te-code', codes, { required: true, selected: codeSelected, placeholder: codes.length === 1 ? false : 'Select...' }) + '</label>' +
@@ -60,9 +61,10 @@ function renderTimeEntryTab() {
 
     '<section style="margin-top:1.25rem;">' +
       '<div class="filters">' +
-        '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All' }) + '</label>' +
-        '<label>From <input type="date" id="te-filter-from"></label>' +
-        '<label>To <input type="date" id="te-filter-to"></label>' +
+        '<label>Year ' + buildYearSelect('te-filter-year', AppState.year) + '</label>' +
+        '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All', selected: AppState.hoursBiz }) + '</label>' +
+        '<label>From <input type="date" id="te-filter-from" value="' + (AppState.hoursFrom || '') + '"></label>' +
+        '<label>To <input type="date" id="te-filter-to" value="' + (AppState.hoursTo || '') + '"></label>' +
         '<button class="btn-subtle" onclick="filterTimeEntries()">Filter</button>' +
       '</div>' +
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
@@ -77,22 +79,74 @@ function renderTimeEntryTab() {
     }
   });
 
+  // Auto-fill end time when start changes
+  document.getElementById('te-start').addEventListener('change', function() {
+    var endEl = document.getElementById('te-end');
+    if (!endEl.value || endEl.value <= this.value) {
+      endEl.value = addHoursToTime(this.value, 1);
+    }
+  });
+
+  // Re-compute autofill when date changes
+  document.getElementById('te-date').addEventListener('change', function() {
+    updateTimeAutofill(_loadedTimeEntries);
+  });
+
   filterTimeEntries();
 }
 
 function filterTimeEntries() {
+  var yearEl = document.getElementById('te-filter-year');
+  var fromEl = document.getElementById('te-filter-from');
+  var toEl = document.getElementById('te-filter-to');
+  var bizEl = document.getElementById('te-filter-biz');
+
+  AppState.year = yearEl ? yearEl.value : AppState.year;
+  AppState.hoursFrom = fromEl ? fromEl.value : '';
+  AppState.hoursTo = toEl ? toEl.value : '';
+  AppState.hoursBiz = bizEl ? bizEl.value : '';
+
   var filters = {
-    business_id: document.getElementById('te-filter-biz').value || undefined,
-    dateFrom: document.getElementById('te-filter-from').value || undefined,
-    dateTo: document.getElementById('te-filter-to').value || undefined
+    year: AppState.year,
+    business_id: AppState.hoursBiz || undefined,
+    dateFrom: AppState.hoursFrom || undefined,
+    dateTo: AppState.hoursTo || undefined
   };
 
   serverCall('getTimeEntries', filters).then(function(entries) {
-    renderTimeEntriesTable(entries);
+    _loadedTimeEntries = entries || [];
+    renderTimeEntriesTable(_loadedTimeEntries);
+    updateTimeAutofill(_loadedTimeEntries);
   }).catch(function(err) {
     document.getElementById('time-entries-list').innerHTML =
       '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
+}
+
+function updateTimeAutofill(entries) {
+  var dateEl = document.getElementById('te-date');
+  var startEl = document.getElementById('te-start');
+  var endEl = document.getElementById('te-end');
+  if (!dateEl || !startEl) return;
+
+  var selectedDate = dateEl.value;
+  var latestEnd = '';
+
+  (entries || []).forEach(function(e) {
+    if (e.date && String(e.date).indexOf(selectedDate) === 0 && e.time_end) {
+      if (e.time_end > latestEnd) latestEnd = e.time_end;
+    }
+  });
+
+  if (latestEnd) {
+    startEl.value = latestEnd;
+    endEl.value = addHoursToTime(latestEnd, 1);
+  } else {
+    if (!startEl.value || startEl.value === '') {
+      startEl.value = '09:00';
+      endEl.value = '10:00';
+    }
+  }
 }
 
 function renderTimeEntriesTable(entries) {
@@ -158,9 +212,8 @@ function submitTimeEntry(event) {
 
   serverCall('addTimeEntry', data).then(function() {
     showToast('Entry added');
-    // Keep date/business/rate/code, clear times + desc for quick re-entry
-    document.getElementById('te-start').value = data.time_end; // next entry starts where this one ended
-    document.getElementById('te-end').value = '';
+    document.getElementById('te-start').value = data.time_end;
+    document.getElementById('te-end').value = addHoursToTime(data.time_end, 1);
     document.getElementById('te-desc').value = '';
     filterTimeEntries();
   }).catch(function(err) {
@@ -196,6 +249,11 @@ function renderExpenseTab() {
     '</form>' +
 
     '<section style="margin-top:1.25rem;">' +
+      '<div class="filters">' +
+        '<label>Year ' + buildYearSelect('exp-filter-year', AppState.year) + '</label>' +
+        '<label>Business ' + buildSelect('exp-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All' }) + '</label>' +
+        '<button class="btn-subtle" onclick="loadExpenses()">Filter</button>' +
+      '</div>' +
       '<div id="expenses-list" aria-busy="true">Loading...</div>' +
     '</section>';
 
@@ -203,10 +261,17 @@ function renderExpenseTab() {
 }
 
 function loadExpenses() {
-  serverCall('getExpenses', {}).then(function(expenses) {
+  var yearEl = document.getElementById('exp-filter-year');
+  var bizEl = document.getElementById('exp-filter-biz');
+  var filters = {
+    year: yearEl ? yearEl.value : AppState.year,
+    business_id: bizEl ? bizEl.value || undefined : undefined
+  };
+
+  serverCall('getExpenses', filters).then(function(expenses) {
     var el = document.getElementById('expenses-list');
     if (!expenses || expenses.length === 0) {
-      el.innerHTML = '<p class="muted">No expenses yet.</p>';
+      el.innerHTML = '<p class="muted">No expenses found.</p>';
       return;
     }
 

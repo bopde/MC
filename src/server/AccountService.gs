@@ -64,28 +64,49 @@ function saveAccountSummary(data) {
 }
 
 /**
- * Get account summaries for a specific month.
+ * Get account summaries for a specific month, plus previous month for comparison.
+ * Returns { current: [...], previous: [...] }.
  */
 function getAccountSummariesForMonth(month) {
   var target = normaliseMonth(month);
-  var summaries = getAll('AccountSummaries').filter(function(s) {
-    return normaliseMonth(s.month) === target;
-  }).map(function(s) {
-    s.month = normaliseMonth(s.month);
-    return s;
+  var prevMonth = previousMonth(target);
+  var allSummaries = getAll('AccountSummaries');
+
+  var current = [];
+  var previous = [];
+  allSummaries.forEach(function(s) {
+    var m = normaliseMonth(s.month);
+    s.month = m;
+    if (m === target) current.push(s);
+    else if (m === prevMonth) previous.push(s);
   });
 
   var accounts = getAll('Accounts');
   var accMap = {};
   accounts.forEach(function(a) { accMap[a.account_id] = a; });
 
-  return summaries.map(function(s) {
-    var acc = accMap[s.account_id];
-    s.account_name = acc ? acc.name : 'Unknown';
-    s.account_type = acc ? acc.type : '';
-    s.currency = acc ? acc.currency : 'NZD';
-    return s;
-  });
+  function enrich(arr) {
+    return arr.map(function(s) {
+      var acc = accMap[s.account_id];
+      s.account_name = acc ? acc.name : 'Unknown';
+      s.account_type = acc ? acc.type : '';
+      s.currency = acc ? acc.currency : 'NZD';
+      return s;
+    });
+  }
+
+  return { current: enrich(current), previous: enrich(previous) };
+}
+
+/**
+ * Compute previous month string from YYYY-MM.
+ */
+function previousMonth(yyyymm) {
+  var parts = yyyymm.split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10) - 1;
+  if (m < 1) { m = 12; y--; }
+  return y + '-' + (m < 10 ? '0' + m : '' + m);
 }
 
 /**

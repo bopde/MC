@@ -83,7 +83,8 @@
     color: var(--foam);
     text-transform: uppercase;
   }
-  body > nav ul:last-child { gap: 0; }
+  body > nav ul:last-child { gap: 0; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  body > nav ul:last-child::-webkit-scrollbar { display: none; }
   body > nav a.nav-link {
     color: rgba(214,234,248,0.65);
     font-size: 0.72rem;
@@ -457,6 +458,31 @@
   .invoice-footer .label { color: var(--ocean); font-weight: 500; }
   .invoice-notes { margin-top: 0.75rem; padding: 0.7rem 0.85rem; background: var(--cream); font-size: 0.85rem; border-radius: 2px; }
 
+  /* ---- Collapsible add-forms in Settings ---- */
+  details.add-form-panel { margin-bottom: 1.25rem; }
+  details.add-form-panel > summary {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    list-style: none;
+    background: var(--sage);
+    color: var(--white);
+    border: 1px solid var(--sage);
+    border-radius: 2px;
+    padding: 0.5rem 1rem;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+    transition: background 0.2s;
+  }
+  details.add-form-panel > summary:hover { background: var(--moss); }
+  details.add-form-panel > summary::-webkit-details-marker { display: none; }
+  details.add-form-panel > summary::marker { display: none; content: ''; }
+  details.add-form-panel[open] > summary { margin-bottom: 1rem; background: var(--moss); }
+  details.add-form-panel > div { padding: 1rem; background: var(--white); border: 1px solid var(--rule); border-radius: 4px; }
+
   /* ---- Utilities ---- */
   .muted { color: var(--muted); }
   .muted.small, .small { font-size: 0.72rem; }
@@ -512,7 +538,7 @@
   }
 
   @media (max-width: 480px) {
-    body > nav ul:last-child { gap: 0; flex-wrap: nowrap; overflow-x: auto; }
+    body > nav ul:last-child { gap: 0; flex-wrap: nowrap; }
     body > nav a.nav-link { font-size: 0.6rem; padding: 0.3rem 0.35rem; }
     .tab-bar button { font-size: 0.65rem; padding: 0.5rem 0.65rem; }
     h2 { font-size: 1.2rem; }

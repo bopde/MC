@@ -55,12 +55,18 @@ function loadMonthlySummaries() {
   var el = document.getElementById('monthly-summaries');
   el.innerHTML = '<div aria-busy="true">Loading...</div>';
 
-  serverCall('getAccountSummariesForMonth', month).then(function(summaries) {
+  serverCall('getAccountSummariesForMonth', month).then(function(data) {
     var accounts = AppCache.accounts || [];
+    var currentArr = data.current || data || [];
+    var previousArr = data.previous || [];
 
     var summaryMap = {};
-    (summaries || []).forEach(function(s) {
+    (Array.isArray(currentArr) ? currentArr : []).forEach(function(s) {
       summaryMap[s.account_id] = s;
+    });
+    var prevMap = {};
+    previousArr.forEach(function(s) {
+      prevMap[s.account_id] = s;
     });
 
     if (accounts.length === 0) {
@@ -72,12 +78,13 @@ function loadMonthlySummaries() {
     var html =
       '<article>' +
         '<header><h3 style="margin:0;">Balances for ' + formatMonth(month) + '</h3>' +
-        '<p class="muted" style="margin:0.25rem 0 0;">Enter end-of-month balances. Rows save in one click.</p></header>' +
+        '<p class="muted" style="margin:0.25rem 0 0;">Enter end-of-month balances. Last month shown for reference.</p></header>' +
         '<form id="monthly-form" onsubmit="saveMonthlySummaries(event)">' +
           '<div class="scroll-x">' +
           '<table class="data-table">' +
           '<thead><tr>' +
             '<th>Account</th><th>Type</th><th>Currency</th>' +
+            '<th class="number">Last month</th>' +
             '<th class="number">Ending balance</th>' +
             '<th class="number">Realised gains</th>' +
             '<th class="number">Unrealised gains</th>' +
@@ -87,10 +94,15 @@ function loadMonthlySummaries() {
 
     accounts.forEach(function(acc) {
       var s = summaryMap[acc.account_id] || {};
+      var prev = prevMap[acc.account_id] || {};
+      var prevBal = (prev.ending_balance != null && prev.ending_balance !== '') ? Number(prev.ending_balance) : null;
+      var cur = acc.currency || 'NZD';
+
       html += '<tr data-account-id="' + acc.account_id + '">' +
         '<td><strong>' + escapeHtml(acc.name) + '</strong></td>' +
         '<td class="muted">' + escapeHtml(acc.type) + '</td>' +
-        '<td class="muted">' + escapeHtml(acc.currency || 'NZD') + '</td>' +
+        '<td class="muted">' + escapeHtml(cur) + '</td>' +
+        '<td class="number muted">' + (prevBal !== null ? formatCurrency(prevBal, cur) : '—') + '</td>' +
         '<td><input type="number" step="0.01" class="as-balance" value="' + (s.ending_balance != null && s.ending_balance !== '' ? s.ending_balance : '') + '"></td>' +
         '<td><input type="number" step="0.01" class="as-realised" value="' + (s.realised_gains != null && s.realised_gains !== '' ? s.realised_gains : '') + '"></td>' +
         '<td><input type="number" step="0.01" class="as-unrealised" value="' + (s.unrealised_gains != null && s.unrealised_gains !== '' ? s.unrealised_gains : '') + '"></td>' +
@@ -227,6 +239,25 @@ function loadYearOverview() {
       totalByCurrency[cur] = (totalByCurrency[cur] || 0) + latest.balance;
     });
 
+    // Compute total in/out across all accounts by currency
+    var inflowByCurrency = {};
+    var outflowByCurrency = {};
+    accounts.forEach(function(acc) {
+      var cur = acc.currency || 'NZD';
+      var prevBal = null;
+      months.forEach(function(mo) {
+        var s = sMap[acc.account_id + '|' + mo];
+        if (!s || s.ending_balance === '' || s.ending_balance === null || s.ending_balance === undefined) return;
+        var bal = Number(s.ending_balance);
+        if (prevBal !== null) {
+          var diff = bal - prevBal;
+          if (diff > 0) inflowByCurrency[cur] = (inflowByCurrency[cur] || 0) + diff;
+          else if (diff < 0) outflowByCurrency[cur] = (outflowByCurrency[cur] || 0) + Math.abs(diff);
+        }
+        prevBal = bal;
+      });
+    });
+
     var html = '';
 
     // Top-level totals
@@ -236,6 +267,16 @@ function loadYearOverview() {
         '<span class="flow-tile__label">Total ' + escapeHtml(cur) + ' (latest)</span>' +
         '<span class="flow-tile__value">' + formatCurrency(totalByCurrency[cur], cur) + '</span>' +
         '<span class="flow-tile__detail">across ' + accounts.filter(function(a){ return (a.currency||'NZD') === cur && latestByAccount[a.account_id]; }).length + ' accounts</span>' +
+      '</div>';
+      html += '<div class="flow-tile flow-tile--paid">' +
+        '<span class="flow-tile__label">Total in (' + escapeHtml(cur) + ')</span>' +
+        '<span class="flow-tile__value">' + formatCurrency(inflowByCurrency[cur] || 0, cur) + '</span>' +
+        '<span class="flow-tile__detail">net increases across months</span>' +
+      '</div>';
+      html += '<div class="flow-tile flow-tile--outstanding">' +
+        '<span class="flow-tile__label">Total out (' + escapeHtml(cur) + ')</span>' +
+        '<span class="flow-tile__value">' + formatCurrency(outflowByCurrency[cur] || 0, cur) + '</span>' +
+        '<span class="flow-tile__detail">net decreases across months</span>' +
       '</div>';
     });
     html += '</section>';

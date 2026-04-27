@@ -78,7 +78,8 @@ function generateInvoice(params) {
     budget_rule_id: '',
     tax_withheld: 0,
     description: params.description || '',
-    notes: params.notes || ''
+    notes: params.notes || '',
+    line_descriptions: params.lineDescriptions ? JSON.stringify(params.lineDescriptions) : ''
   });
 
   // Mark time entries as invoiced (look up column dynamically)
@@ -116,12 +117,18 @@ function getInvoiceDetails(invoiceId) {
     return exp.invoice_id === invoiceId;
   });
 
+  // Parse stored line descriptions
+  var lineDescs = {};
+  if (invoice.line_descriptions) {
+    try { lineDescs = JSON.parse(invoice.line_descriptions); } catch (e) {}
+  }
+
   // Group time entries by work code
   var codeGroups = {};
   timeEntries.forEach(function(te) {
     var code = te.work_code;
     if (!codeGroups[code]) {
-      codeGroups[code] = { code: code, entries: [], totalHours: 0, totalAmount: 0, rate: 0 };
+      codeGroups[code] = { code: code, description: lineDescs[code] || '', entries: [], totalHours: 0, totalAmount: 0, rate: 0 };
     }
     codeGroups[code].entries.push(te);
     codeGroups[code].totalHours += Number(te.hours) || 0;
@@ -222,8 +229,17 @@ function updateInvoice(params) {
   var invoice = findById('Invoices', params.invoice_id);
   if (!invoice) throw new Error('Invoice not found: ' + params.invoice_id);
 
+  if (invoice.status === 'paid') {
+    throw new Error('Cannot edit a paid invoice. Void it first if changes are needed.');
+  }
+
   if (params.description !== undefined) invoice.description = params.description;
   if (params.notes !== undefined) invoice.notes = params.notes;
+  if (params.line_descriptions !== undefined) {
+    invoice.line_descriptions = typeof params.line_descriptions === 'string'
+      ? params.line_descriptions
+      : JSON.stringify(params.line_descriptions);
+  }
 
   var recalc = false;
   if (params.include_gst !== undefined) {
@@ -262,10 +278,13 @@ function updateInvoice(params) {
 }
 
 /**
- * Get all invoices with business name and currency attached.
+ * Get invoices with business name and currency. Accepts optional year filter
+ * to reduce payload (critical at scale).
  */
-function getInvoicesWithDetails() {
-  var invoices = getAll('Invoices');
+function getInvoicesWithDetails(year) {
+  var invoices = year
+    ? getByYear('Invoices', 'created_date', year)
+    : getAll('Invoices');
   var businesses = getAll('Businesses');
   var bizMap = {};
   businesses.forEach(function(b) { bizMap[b.business_id] = b; });

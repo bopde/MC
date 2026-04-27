@@ -51,7 +51,8 @@ function setupSheets() {
     'Invoices': [
       'invoice_id', 'business_id', 'date_from', 'date_to', 'created_date',
       'include_gst', 'gst_rate', 'subtotal', 'gst_amount', 'total',
-      'status', 'budget_rule_id', 'tax_withheld', 'description', 'notes'
+      'status', 'budget_rule_id', 'tax_withheld', 'description', 'notes',
+      'line_descriptions'
     ],
     'BudgetAllocations': [
       'allocation_id', 'invoice_id', 'category', 'percentage',
@@ -103,6 +104,38 @@ function setupSheets() {
     ss.deleteSheet(sheet1);
   }
 
+  // Add missing columns to existing sheets
+  migrateColumns(ss, schemas);
+
   Logger.log('Setup complete!');
   return 'Setup complete! Created sheets: ' + Object.keys(schemas).join(', ');
+}
+
+/**
+ * Add any missing columns to existing sheets.
+ * Safe to run repeatedly — only appends columns that don't exist yet.
+ */
+function migrateColumns(ss, schemas) {
+  Object.keys(schemas).forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var lastCol = sheet.getLastColumn();
+    var existing = lastCol > 0
+      ? sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+      : [];
+    var added = [];
+    schemas[sheetName].forEach(function(col) {
+      if (existing.indexOf(col) === -1) {
+        var newCol = existing.length + added.length + 1;
+        sheet.getRange(1, newCol).setValue(col)
+          .setFontWeight('bold')
+          .setBackground('#4a86c8')
+          .setFontColor('#ffffff');
+        added.push(col);
+      }
+    });
+    if (added.length > 0) {
+      Logger.log('Added columns to ' + sheetName + ': ' + added.join(', '));
+    }
+  });
 }

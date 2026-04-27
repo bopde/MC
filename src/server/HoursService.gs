@@ -50,11 +50,20 @@ function addExpense(data) {
 }
 
 /**
- * Get time entries filtered by business and/or date range.
+ * Get time entries filtered by year, business, and/or date range.
+ * When year is provided, uses getByYear for a smaller payload.
  */
 function getTimeEntries(filters) {
   filters = filters || {};
-  var entries = getAll('TimeEntries');
+  var entries;
+
+  if (filters.dateFrom && filters.dateTo) {
+    entries = getByDateRange('TimeEntries', 'date', filters.dateFrom, filters.dateTo);
+  } else if (filters.year) {
+    entries = getByYear('TimeEntries', 'date', filters.year);
+  } else {
+    entries = getAll('TimeEntries');
+  }
 
   if (filters.business_id) {
     entries = entries.filter(function(e) { return e.business_id === filters.business_id; });
@@ -76,23 +85,22 @@ function getTimeEntries(filters) {
 }
 
 /**
- * Get expenses filtered by business and/or date range.
+ * Get expenses filtered by year, business, and/or date range.
  */
 function getExpenses(filters) {
   filters = filters || {};
-  var expenses = getAll('Expenses');
+  var expenses;
+
+  if (filters.dateFrom && filters.dateTo) {
+    expenses = getByDateRange('Expenses', 'date', filters.dateFrom, filters.dateTo);
+  } else if (filters.year) {
+    expenses = getByYear('Expenses', 'date', filters.year);
+  } else {
+    expenses = getAll('Expenses');
+  }
 
   if (filters.business_id) {
     expenses = expenses.filter(function(e) { return e.business_id === filters.business_id; });
-  }
-  if (filters.dateFrom) {
-    var from = new Date(filters.dateFrom);
-    expenses = expenses.filter(function(e) { return new Date(e.date) >= from; });
-  }
-  if (filters.dateTo) {
-    var to = new Date(filters.dateTo);
-    to.setHours(23, 59, 59);
-    expenses = expenses.filter(function(e) { return new Date(e.date) <= to; });
   }
 
   return expenses;

@@ -53,17 +53,28 @@ function showBudgetTab(tab) {
 
 function renderBudgetSummary() {
   var content = document.getElementById('budget-tab-content');
-  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+  var year = AppState.year;
 
-  serverCall('getBudgetSummary').then(function(summary) {
+  content.innerHTML =
+    '<div class="filters">' +
+      '<label>Year ' + buildYearSelect('budget-filter-year', year) + '</label>' +
+      '<button class="btn-subtle" onclick="renderBudgetSummary()">Filter</button>' +
+    '</div>' +
+    '<div id="budget-summary-body" aria-busy="true">Loading...</div>';
+
+  var yearEl = document.getElementById('budget-filter-year');
+  if (yearEl) { year = yearEl.value; AppState.year = year; }
+
+  serverCall('getBudgetSummary', year).then(function(summary) {
+    var body = document.getElementById('budget-summary-body');
     var categories = (summary && summary.categories) || [];
     var totals = (summary && summary.totals) || {};
 
     var hasData = categories.some(function(c) { return c.items && c.items.length > 0; });
     if (!hasData) {
-      content.innerHTML =
+      body.innerHTML =
         '<article class="empty-state">' +
-          '<h3>No allocations yet</h3>' +
+          '<h3>No allocations for ' + year + '</h3>' +
           '<p>Mark an invoice as paid, then come here to allocate it.</p>' +
         '</article>';
       return;
@@ -113,9 +124,10 @@ function renderBudgetSummary() {
 
     html += '</div></section>';
 
-    content.innerHTML = html;
+    body.innerHTML = html;
   }).catch(function(err) {
-    content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+    var body = document.getElementById('budget-summary-body');
+    if (body) body.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -214,7 +226,7 @@ function renderBudgetAllocate() {
   content.innerHTML = '<div aria-busy="true">Loading invoices...</div>';
 
   Promise.all([
-    serverCall('getInvoicesWithDetails'),
+    serverCall('getInvoicesWithDetails', AppState.year),
     serverCall('getAll', 'BudgetAllocations')
   ]).then(function(results) {
     var invoices = results[0] || [];
@@ -316,6 +328,7 @@ function previewAllocation() {
           (withheldAmount > 0 ? '<div><span class="muted">Withheld at source</span><strong>' + formatCurrency(withheldAmount, currency) + '</strong></div>' : '') +
           '<div><span class="muted">Net to allocate</span><strong>' + formatCurrency(netToAllocate, currency) + '</strong></div>' +
         '</div>' +
+        '<p class="muted" style="font-size:0.78rem;margin:0 0 0.5rem;">Withheld categories are applied to the gross total. All other categories are applied to the net amount after withheld is subtracted.</p>' +
         '<table class="data-table">' +
           '<thead><tr><th>Category</th><th class="number">%</th><th class="number">Amount</th><th>Note</th></tr></thead><tbody>';
 
