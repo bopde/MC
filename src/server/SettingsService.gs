@@ -5,7 +5,6 @@
 
 /**
  * Bootstrap: load all reference data in a single RPC.
- * Replaces 5 separate serverCalls for a major speed-up on app start.
  */
 function bootstrap() {
   var result = {
@@ -34,14 +33,6 @@ function addBusiness(data) {
   return appendRow('Businesses', data);
 }
 
-function updateBusiness(data) {
-  return updateRow('Businesses', data._rowIndex, data);
-}
-
-function getBusinesses() {
-  return getActive('Businesses');
-}
-
 function getAllBusinesses() {
   return getAll('Businesses');
 }
@@ -57,14 +48,6 @@ function addWorkCode(data) {
   return appendRow('WorkCodes', data);
 }
 
-function updateWorkCode(data) {
-  return updateRow('WorkCodes', data._rowIndex, data);
-}
-
-function getWorkCodes() {
-  return getActive('WorkCodes');
-}
-
 // --- Accounts ---
 
 function addAccount(data) {
@@ -76,20 +59,11 @@ function addAccount(data) {
   return appendRow('Accounts', data);
 }
 
-function updateAccount(data) {
-  return updateRow('Accounts', data._rowIndex, data);
-}
-
-function getAccounts() {
-  return getActive('Accounts');
-}
-
 // --- Budget Rules ---
 
 function addBudgetRule(data) {
   validateBudgetRule(data);
 
-  // If this is marked as default, unmark others
   if (data.is_default) {
     var existing = getAll('BudgetRules');
     existing.forEach(function(r) {
@@ -103,31 +77,8 @@ function addBudgetRule(data) {
   return appendRow('BudgetRules', data);
 }
 
-function updateBudgetRule(data) {
-  validateBudgetRule(data);
-
-  if (data.is_default) {
-    var existing = getAll('BudgetRules');
-    existing.forEach(function(r) {
-      if (r.is_default && r.rule_id !== data.rule_id) {
-        r.is_default = false;
-        updateRow('BudgetRules', r._rowIndex, r);
-      }
-    });
-  }
-
-  return updateRow('BudgetRules', data._rowIndex, data);
-}
-
 function getBudgetRules() {
   return getAll('BudgetRules');
-}
-
-function getDefaultBudgetRule() {
-  var rules = getAll('BudgetRules');
-  return rules.find(function(r) {
-    return r.is_default === true || r.is_default === 'TRUE' || r.is_default === 'true';
-  }) || null;
 }
 
 // --- My Details (Invoice From) ---
@@ -141,7 +92,6 @@ function getMyDetails() {
     });
     return details;
   } catch (e) {
-    // MyDetails sheet may not exist yet — return empty
     return {};
   }
 }
@@ -152,9 +102,7 @@ function saveMyDetails(data) {
   if (!sheet) throw new Error('MyDetails sheet not found. Run setupSheets() first.');
 
   var existing = sheet.getDataRange().getValues();
-  var headers = existing[0];
 
-  // For each key in data, find the row and update, or append
   Object.keys(data).forEach(function(key) {
     var found = false;
     for (var i = 1; i < existing.length; i++) {

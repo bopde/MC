@@ -41,7 +41,7 @@ function renderInvoiceList() {
 
     invoices.sort(function(a, b) { return new Date(b.created_date) - new Date(a.created_date); });
 
-    var html = '<table class="data-table"><thead><tr>' +
+    var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
       '<th>Invoice #</th><th>Business</th><th>Period</th><th>Created</th>' +
       '<th class="number">Subtotal</th><th class="number">GST</th>' +
       '<th class="number">Total</th><th>Status</th><th>Actions</th>' +
@@ -65,7 +65,7 @@ function renderInvoiceList() {
         '</tr>';
     });
 
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     content.innerHTML = html;
   }).catch(function(err) {
     content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
@@ -73,12 +73,17 @@ function renderInvoiceList() {
 }
 
 function buildStatusButton(inv) {
+  var html = '';
   if (inv.status === 'draft') {
-    return '<button class="btn-small" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'sent\')">Mark Sent</button>';
+    html += '<button class="btn-small" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'sent\')">Mark Sent</button> ';
+    html += '<button class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
   } else if (inv.status === 'sent') {
-    return '<button class="btn-small btn-primary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'paid\')">Mark Paid</button>';
+    html += '<button class="btn-small btn-primary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'paid\')">Mark Paid</button> ';
+    html += '<button class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
+  } else if (inv.status === 'paid') {
+    html += '<button class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
   }
-  return '';
+  return html;
 }
 
 function changeInvoiceStatus(invoiceId, newStatus) {
@@ -86,6 +91,15 @@ function changeInvoiceStatus(invoiceId, newStatus) {
     showToast('Invoice marked as ' + newStatus);
     renderInvoiceList();
     App.invalidate(['budget']);
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
+function voidInvoice(invoiceId) {
+  if (!confirm('Void this invoice? Time entries and expenses will be unlinked so they can be re-invoiced.')) return;
+  serverCall('updateInvoiceStatusFromClient', invoiceId + '|void').then(function() {
+    showToast('Invoice voided');
+    renderInvoiceList();
+    App.invalidate(['hours', 'budget']);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 

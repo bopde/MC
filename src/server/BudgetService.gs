@@ -29,9 +29,8 @@ var WITHHELD_CATEGORIES = ['Tax Withheld', 'ACC Withheld'];
  *
  * @param {string} invoiceId
  * @param {string} ruleId
- * @param {number} taxAlreadyWithheld - amount of tax already withheld by the payer
  */
-function allocateBudget(invoiceId, ruleId, taxAlreadyWithheld) {
+function allocateBudget(invoiceId, ruleId) {
   var invoice = findById('Invoices', invoiceId);
   if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
 

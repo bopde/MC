@@ -17,11 +17,11 @@ function updateInvoiceStatusFromClient(params) {
 
 /**
  * Allocate budget from client.
- * @param {string} params - "invoiceId|ruleId|taxWithheld"
+ * @param {string} params - "invoiceId|ruleId"
  */
 function allocateBudgetFromClient(params) {
   var parts = params.split('|');
-  return allocateBudget(parts[0], parts[1], Number(parts[2]) || 0);
+  return allocateBudget(parts[0], parts[1]);
 }
 
 /**
@@ -58,26 +58,10 @@ function toggleEntityFromClient(params) {
 }
 
 /**
- * Get uninvoiced items - wrapper that accepts an object.
+ * Get uninvoiced items — delegates to the canonical implementation
+ * in InvoiceService. This wrapper exists because google.script.run
+ * can only pass a single argument (the params object).
  */
 function getUninvoicedItems(params) {
-  var from = new Date(params.dateFrom);
-  var to = new Date(params.dateTo);
-  to.setHours(23, 59, 59);
-
-  var timeEntries = getAll('TimeEntries').filter(function(te) {
-    var d = new Date(te.date);
-    return te.business_id === params.businessId &&
-           (!te.invoice_id || te.invoice_id === '') &&
-           d >= from && d <= to;
-  });
-
-  var expenses = getAll('Expenses').filter(function(exp) {
-    var d = new Date(exp.date);
-    return exp.business_id === params.businessId &&
-           (!exp.invoice_id || exp.invoice_id === '') &&
-           d >= from && d <= to;
-  });
-
-  return { timeEntries: timeEntries, expenses: expenses };
+  return getUninvoicedItemsInternal(params.businessId, params.dateFrom, params.dateTo);
 }

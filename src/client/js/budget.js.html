@@ -355,8 +355,7 @@ function confirmAllocation() {
   var invoiceId = document.getElementById('ba-invoice').value;
   var ruleId = document.getElementById('ba-rule').value;
 
-  // Withheld is now derived from the rule itself — no separate input
-  serverCall('allocateBudgetFromClient', invoiceId + '|' + ruleId + '|0').then(function() {
+  serverCall('allocateBudgetFromClient', invoiceId + '|' + ruleId).then(function() {
     showToast('Budget allocated');
     App.invalidate(['budget']);
     showBudgetTab('summary');

@@ -159,7 +159,54 @@ function updateInvoiceStatus(invoiceId, newStatus) {
   var invoice = findById('Invoices', invoiceId);
   if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
 
+  if (newStatus === 'void') {
+    return voidInvoice(invoice);
+  }
+
   invoice.status = newStatus;
+  updateRow('Invoices', invoice._rowIndex, invoice);
+  return invoice;
+}
+
+/**
+ * Void an invoice: block if budget allocations exist, then unlink
+ * time entries and expenses so they can be re-invoiced.
+ */
+function voidInvoice(invoice) {
+  var allocations = getAll('BudgetAllocations').filter(function(a) {
+    return a.invoice_id === invoice.invoice_id;
+  });
+  if (allocations.length > 0) {
+    throw new Error('Cannot void — this invoice has budget allocations. Remove them first.');
+  }
+
+  var ss = getSpreadsheet();
+
+  // Unlink time entries
+  var teSheet = ss.getSheetByName('TimeEntries');
+  if (teSheet) {
+    var teInvCol = getColumnIndex(teSheet, 'invoice_id');
+    var teAll = getAll('TimeEntries');
+    teAll.forEach(function(te) {
+      if (te.invoice_id === invoice.invoice_id) {
+        teSheet.getRange(te._rowIndex, teInvCol).setValue('');
+      }
+    });
+  }
+
+  // Unlink expenses
+  var expSheet = ss.getSheetByName('Expenses');
+  if (expSheet) {
+    var expInvCol = getColumnIndex(expSheet, 'invoice_id');
+    var expAll = getAll('Expenses');
+    expAll.forEach(function(exp) {
+      if (exp.invoice_id === invoice.invoice_id) {
+        expSheet.getRange(exp._rowIndex, expInvCol).setValue('');
+      }
+    });
+  }
+
+  invoice.status = 'void';
   updateRow('Invoices', invoice._rowIndex, invoice);
   return invoice;
 }
