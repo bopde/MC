@@ -93,19 +93,17 @@ function loadMonthlySummaries() {
       var cur = acc.currency || 'NZD';
 
       html += '<article class="account-entry-card" data-account-id="' + acc.account_id + '">' +
-        '<header><h4 style="margin:0;">' + escapeHtml(acc.name) + '</h4>' +
+        '<header><h4 style="margin:0;font-size:0.92rem;">' + escapeHtml(acc.name) + '</h4>' +
         '<span class="muted small">' + escapeHtml(acc.type) + ' · ' + escapeHtml(cur) + '</span></header>' +
-        '<div class="form-row">' +
+        '<div class="form-row" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));">' +
           '<label>Balance <input type="number" step="0.01" class="as-balance" value="' + inputVal(s, 'ending_balance') + '">' + prevHint(prev, 'ending_balance', cur) + '</label>' +
-          '<label>Realised gains <input type="number" step="0.01" class="as-realised" value="' + inputVal(s, 'realised_gains') + '">' + prevHint(prev, 'realised_gains', cur) + '</label>' +
-          '<label>Unrealised gains <input type="number" step="0.01" class="as-unrealised" value="' + inputVal(s, 'unrealised_gains') + '">' + prevHint(prev, 'unrealised_gains', cur) + '</label>' +
+          '<label>In <input type="number" step="0.01" class="as-total-in" value="' + inputVal(s, 'total_in') + '">' + prevHint(prev, 'total_in', cur) + '</label>' +
+          '<label>Out <input type="number" step="0.01" class="as-total-out" value="' + inputVal(s, 'total_out') + '">' + prevHint(prev, 'total_out', cur) + '</label>' +
+          '<label>Realised <input type="number" step="0.01" class="as-realised" value="' + inputVal(s, 'realised_gains') + '">' + prevHint(prev, 'realised_gains', cur) + '</label>' +
+          '<label>Unrealised <input type="number" step="0.01" class="as-unrealised" value="' + inputVal(s, 'unrealised_gains') + '">' + prevHint(prev, 'unrealised_gains', cur) + '</label>' +
+          '<label>Tax <input type="number" step="0.01" class="as-tax" value="' + inputVal(s, 'tax_paid') + '">' + prevHint(prev, 'tax_paid', cur) + '</label>' +
+          '<label>Notes <input type="text" class="as-notes" value="' + escapeHtml(s.notes || '') + '" placeholder="—"></label>' +
         '</div>' +
-        '<div class="form-row">' +
-          '<label>Tax paid <input type="number" step="0.01" class="as-tax" value="' + inputVal(s, 'tax_paid') + '">' + prevHint(prev, 'tax_paid', cur) + '</label>' +
-          '<label>Total in <input type="number" step="0.01" class="as-total-in" value="' + inputVal(s, 'total_in') + '">' + prevHint(prev, 'total_in', cur) + '</label>' +
-          '<label>Total out <input type="number" step="0.01" class="as-total-out" value="' + inputVal(s, 'total_out') + '">' + prevHint(prev, 'total_out', cur) + '</label>' +
-        '</div>' +
-        '<label>Notes <input type="text" class="as-notes" value="' + escapeHtml(s.notes || '') + '"></label>' +
       '</article>';
     });
 
@@ -239,22 +237,18 @@ function loadYearOverview() {
       totalByCurrency[cur] = (totalByCurrency[cur] || 0) + latest.balance;
     });
 
-    // Compute total in/out across all accounts by currency
+    // Sum actual total_in / total_out from stored summaries
     var inflowByCurrency = {};
     var outflowByCurrency = {};
     accounts.forEach(function(acc) {
       var cur = acc.currency || 'NZD';
-      var prevBal = null;
       months.forEach(function(mo) {
         var s = sMap[acc.account_id + '|' + mo];
-        if (!s || s.ending_balance === '' || s.ending_balance === null || s.ending_balance === undefined) return;
-        var bal = Number(s.ending_balance);
-        if (prevBal !== null) {
-          var diff = bal - prevBal;
-          if (diff > 0) inflowByCurrency[cur] = (inflowByCurrency[cur] || 0) + diff;
-          else if (diff < 0) outflowByCurrency[cur] = (outflowByCurrency[cur] || 0) + Math.abs(diff);
-        }
-        prevBal = bal;
+        if (!s) return;
+        var ti = Number(s.total_in) || 0;
+        var to = Number(s.total_out) || 0;
+        if (ti) inflowByCurrency[cur] = (inflowByCurrency[cur] || 0) + ti;
+        if (to) outflowByCurrency[cur] = (outflowByCurrency[cur] || 0) + to;
       });
     });
 
@@ -271,12 +265,12 @@ function loadYearOverview() {
       html += '<div class="flow-tile flow-tile--paid">' +
         '<span class="flow-tile__label">Total in (' + escapeHtml(cur) + ')</span>' +
         '<span class="flow-tile__value">' + formatCurrency(inflowByCurrency[cur] || 0, cur) + '</span>' +
-        '<span class="flow-tile__detail">net increases across months</span>' +
+        '<span class="flow-tile__detail">sum of monthly inflows</span>' +
       '</div>';
       html += '<div class="flow-tile flow-tile--outstanding">' +
         '<span class="flow-tile__label">Total out (' + escapeHtml(cur) + ')</span>' +
         '<span class="flow-tile__value">' + formatCurrency(outflowByCurrency[cur] || 0, cur) + '</span>' +
-        '<span class="flow-tile__detail">net decreases across months</span>' +
+        '<span class="flow-tile__detail">sum of monthly outflows</span>' +
       '</div>';
     });
     html += '</section>';
@@ -340,26 +334,31 @@ function loadYearOverview() {
       var cur = acc.currency || 'NZD';
       var hasAny = months.some(function(mo){
         var s = sMap[acc.account_id + '|' + mo];
-        return s && (Number(s.realised_gains) || Number(s.unrealised_gains) || Number(s.tax_paid));
+        return s && (Number(s.realised_gains) || Number(s.unrealised_gains) || Number(s.tax_paid) || Number(s.total_in) || Number(s.total_out));
       });
       if (!hasAny) return;
 
       html += '<h4 class="section-label">' + escapeHtml(acc.name) + ' <small class="muted">(' + escapeHtml(cur) + ')</small></h4>' +
         '<div class="scroll-x"><table class="data-table data-table--compact">' +
-        '<thead><tr><th>Month</th><th class="number">Realised</th><th class="number">Unrealised</th>' +
+        '<thead><tr><th>Month</th><th class="number">Total in</th><th class="number">Total out</th>' +
+        '<th class="number">Realised</th><th class="number">Unrealised</th>' +
         '<th class="number">Tax paid</th><th>Notes</th></tr></thead><tbody>';
 
-      var rTot = 0, uTot = 0, tTot = 0;
+      var rTot = 0, uTot = 0, tTot = 0, tiTot = 0, toTot = 0;
       months.forEach(function(mo) {
         var s = sMap[acc.account_id + '|' + mo];
         if (!s) return;
         var r = Number(s.realised_gains) || 0;
         var u = Number(s.unrealised_gains) || 0;
         var t = Number(s.tax_paid) || 0;
-        if (r === 0 && u === 0 && t === 0 && !s.notes) return;
-        rTot += r; uTot += u; tTot += t;
+        var ti = Number(s.total_in) || 0;
+        var to = Number(s.total_out) || 0;
+        if (r === 0 && u === 0 && t === 0 && ti === 0 && to === 0 && !s.notes) return;
+        rTot += r; uTot += u; tTot += t; tiTot += ti; toTot += to;
         html += '<tr>' +
           '<td>' + formatMonth(mo) + '</td>' +
+          '<td class="number">' + (ti ? formatCurrency(ti, cur) : '<span class="muted">—</span>') + '</td>' +
+          '<td class="number">' + (to ? formatCurrency(to, cur) : '<span class="muted">—</span>') + '</td>' +
           '<td class="number">' + (r ? formatCurrency(r, cur) : '<span class="muted">—</span>') + '</td>' +
           '<td class="number">' + (u ? formatCurrency(u, cur) : '<span class="muted">—</span>') + '</td>' +
           '<td class="number">' + (t ? formatCurrency(t, cur) : '<span class="muted">—</span>') + '</td>' +
@@ -367,6 +366,8 @@ function loadYearOverview() {
           '</tr>';
       });
       html += '<tr class="total-row"><td><strong>Total</strong></td>' +
+        '<td class="number"><strong>' + formatCurrency(tiTot, cur) + '</strong></td>' +
+        '<td class="number"><strong>' + formatCurrency(toTot, cur) + '</strong></td>' +
         '<td class="number"><strong>' + formatCurrency(rTot, cur) + '</strong></td>' +
         '<td class="number"><strong>' + formatCurrency(uTot, cur) + '</strong></td>' +
         '<td class="number"><strong>' + formatCurrency(tTot, cur) + '</strong></td>' +
