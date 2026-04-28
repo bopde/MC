@@ -97,6 +97,11 @@ function getMyDetails() {
 }
 
 function saveMyDetails(data) {
+  var ALLOWED_KEYS = [
+    'business_name', 'contact_name', 'email', 'phone', 'address',
+    'tax_number', 'gst_number', 'bank_account', 'payment_terms'
+  ];
+
   var ss = getSpreadsheet();
   var sheet = ss.getSheetByName('MyDetails');
   if (!sheet) throw new Error('MyDetails sheet not found. Run setupSheets() first.');
@@ -104,16 +109,18 @@ function saveMyDetails(data) {
   var existing = sheet.getDataRange().getValues();
 
   Object.keys(data).forEach(function(key) {
+    if (ALLOWED_KEYS.indexOf(key) === -1) return;
+    var val = sanitiseCell(data[key]);
     var found = false;
     for (var i = 1; i < existing.length; i++) {
       if (existing[i][0] === key) {
-        sheet.getRange(i + 1, 2).setValue(data[key]);
+        sheet.getRange(i + 1, 2).setValue(val);
         found = true;
         break;
       }
     }
     if (!found) {
-      sheet.appendRow([key, data[key]]);
+      sheet.appendRow([key, val]);
     }
   });
 

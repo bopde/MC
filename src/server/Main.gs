@@ -6,7 +6,6 @@ function doGet(e) {
   var template = HtmlService.createTemplateFromFile('client/index');
   return template.evaluate()
     .setTitle('Finance Tracker')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 

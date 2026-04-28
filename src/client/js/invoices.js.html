@@ -68,7 +68,7 @@ function renderInvoiceList() {
         '<td class="number">' + formatCurrency(inv.subtotal, cur) + '</td>' +
         '<td class="number">' + (Number(inv.gst_amount) ? formatCurrency(inv.gst_amount, cur) : '&mdash;') + '</td>' +
         '<td class="number"><strong>' + formatCurrency(inv.total, cur) + '</strong></td>' +
-        '<td><span class="badge badge-' + inv.status + '">' + inv.status + '</span></td>' +
+        '<td><span class="badge badge-' + escapeHtml(inv.status) + '">' + escapeHtml(inv.status) + '</span></td>' +
         '<td class="actions">' +
           '<button class="btn-small" onclick="viewInvoice(\'' + inv.invoice_id + '\')">View</button> ' +
           buildStatusButton(inv) +
@@ -151,7 +151,7 @@ function renderInvoiceDetail(data) {
         '<div class="invoice-meta">' +
           '<div><span class="label">Date:</span> ' + formatDate(inv.created_date) + '</div>' +
           '<div><span class="label">Period:</span> ' + formatDate(inv.date_from) + ' &ndash; ' + formatDate(inv.date_to) + '</div>' +
-          '<div><span class="label">Status:</span> <span class="badge badge-' + inv.status + '">' + inv.status + '</span></div>' +
+          '<div><span class="label">Status:</span> <span class="badge badge-' + escapeHtml(inv.status) + '">' + escapeHtml(inv.status) + '</span></div>' +
         '</div>' +
       '</header>' +
 

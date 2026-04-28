@@ -30,38 +30,43 @@ function normaliseMonth(val) {
  * If a summary already exists for the account+month, updates it.
  */
 function saveAccountSummary(data) {
-  var month = normaliseMonth(data.month);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var month = normaliseMonth(data.month);
 
-  var existing = getAll('AccountSummaries').find(function(s) {
-    return s.account_id === data.account_id && normaliseMonth(s.month) === month;
-  });
+    var existing = getAll('AccountSummaries').find(function(s) {
+      return s.account_id === data.account_id && normaliseMonth(s.month) === month;
+    });
 
-  var payload = {
-    account_id: data.account_id,
-    month: month,
-    ending_balance: Number(data.ending_balance) || 0,
-    realised_gains: Number(data.realised_gains) || 0,
-    unrealised_gains: Number(data.unrealised_gains) || 0,
-    tax_paid: Number(data.tax_paid) || 0,
-    total_in: Number(data.total_in) || 0,
-    total_out: Number(data.total_out) || 0,
-    notes: data.notes || ''
-  };
+    var payload = {
+      account_id: data.account_id,
+      month: month,
+      ending_balance: Number(data.ending_balance) || 0,
+      realised_gains: Number(data.realised_gains) || 0,
+      unrealised_gains: Number(data.unrealised_gains) || 0,
+      tax_paid: Number(data.tax_paid) || 0,
+      total_in: Number(data.total_in) || 0,
+      total_out: Number(data.total_out) || 0,
+      notes: data.notes || ''
+    };
 
-  // Force the month column to text format so Sheets doesn't coerce "2026-04" to a Date
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName('AccountSummaries');
-  var monthCol = getColumnIndex(sheet, 'month');
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName('AccountSummaries');
+    var monthCol = getColumnIndex(sheet, 'month');
 
-  if (existing) {
-    payload._rowIndex = existing._rowIndex;
-    updateRow('AccountSummaries', existing._rowIndex, payload);
-    sheet.getRange(existing._rowIndex, monthCol).setNumberFormat('@').setValue(month);
-    return payload;
-  } else {
-    var result = appendRow('AccountSummaries', payload);
-    sheet.getRange(result._rowIndex, monthCol).setNumberFormat('@').setValue(month);
-    return result;
+    if (existing) {
+      payload._rowIndex = existing._rowIndex;
+      updateRow('AccountSummaries', existing._rowIndex, payload);
+      sheet.getRange(existing._rowIndex, monthCol).setNumberFormat('@').setValue(month);
+      return payload;
+    } else {
+      var result = appendRow('AccountSummaries', payload);
+      sheet.getRange(result._rowIndex, monthCol).setNumberFormat('@').setValue(month);
+      return result;
+    }
+  } finally {
+    lock.releaseLock();
   }
 }
 

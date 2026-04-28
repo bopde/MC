@@ -161,13 +161,20 @@ function getInvoiceDetails(invoiceId) {
  * Update invoice status (draft -> sent -> paid).
  */
 function updateInvoiceStatus(invoiceId, newStatus) {
-  var validStatuses = ['draft', 'sent', 'paid', 'void'];
-  if (validStatuses.indexOf(newStatus) === -1) {
-    throw new Error('Invalid status: ' + newStatus);
-  }
+  var validTransitions = {
+    draft: ['sent', 'void'],
+    sent: ['paid', 'void'],
+    paid: ['void'],
+    void: []
+  };
 
   var invoice = findById('Invoices', invoiceId);
   if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
+
+  var allowed = validTransitions[invoice.status] || [];
+  if (allowed.indexOf(newStatus) === -1) {
+    throw new Error('Cannot change status from "' + invoice.status + '" to "' + newStatus + '".');
+  }
 
   if (newStatus === 'void') {
     return voidInvoice(invoice);
@@ -232,8 +239,8 @@ function updateInvoice(params) {
   var invoice = findById('Invoices', params.invoice_id);
   if (!invoice) throw new Error('Invoice not found: ' + params.invoice_id);
 
-  if (invoice.status === 'paid') {
-    throw new Error('Cannot edit a paid invoice. Void it first if changes are needed.');
+  if (invoice.status === 'paid' || invoice.status === 'void') {
+    throw new Error('Cannot edit a ' + invoice.status + ' invoice.');
   }
 
   if (params.description !== undefined) invoice.description = params.description;
@@ -314,13 +321,22 @@ function generateInvoiceId() {
     var base = mm + yy;
 
     var invoices = getAll('Invoices');
-    var pattern = new RegExp('^' + base + '[a-z]?$');
+    var pattern = new RegExp('^' + base + '[a-z]*$');
     var sameMonth = invoices.filter(function(inv) {
       return pattern.test(String(inv.invoice_id));
     });
 
     if (sameMonth.length === 0) return base;
-    return base + String.fromCharCode(96 + sameMonth.length);
+
+    // Generate suffix: a-z, then aa, ab, ... az, ba, ...
+    var n = sameMonth.length;
+    var suffix = '';
+    do {
+      suffix = String.fromCharCode(97 + ((n - 1) % 26)) + suffix;
+      n = Math.floor((n - 1) / 26);
+    } while (n > 0);
+
+    return base + suffix;
   } finally {
     lock.releaseLock();
   }

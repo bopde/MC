@@ -7,18 +7,28 @@
  * Add a time entry. Calculates hours and line total server-side.
  */
 function addTimeEntry(data) {
-  // Calculate hours from start/end times
+  if (!data.business_id || !data.date || !data.time_start || !data.time_end || !data.work_code) {
+    throw new Error('Missing required fields.');
+  }
+
   var start = parseTime(data.date, data.time_start);
   var end = parseTime(data.date, data.time_end);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new Error('Invalid date or time values.');
+  }
 
   if (end <= start) {
     throw new Error('End time must be after start time.');
   }
 
-  var hours = (end - start) / (1000 * 60 * 60); // ms to hours
+  var hours = (end - start) / (1000 * 60 * 60);
   hours = Math.round(hours * 100) / 100;
 
   var rate = Number(data.rate);
+  if (isNaN(rate) || rate < 0) {
+    throw new Error('Rate must be a non-negative number.');
+  }
   var lineTotal = Math.round(hours * rate * 100) / 100;
 
   return appendRow('TimeEntries', {
@@ -39,10 +49,19 @@ function addTimeEntry(data) {
  * Add an expense entry.
  */
 function addExpense(data) {
+  if (!data.business_id || !data.date || !data.work_code) {
+    throw new Error('Missing required fields.');
+  }
+
+  var amount = Number(data.amount);
+  if (isNaN(amount) || amount < 0) {
+    throw new Error('Amount must be a non-negative number.');
+  }
+
   return appendRow('Expenses', {
     business_id: data.business_id,
     date: data.date,
-    amount: Number(data.amount),
+    amount: amount,
     description: data.description,
     work_code: data.work_code,
     invoice_id: ''

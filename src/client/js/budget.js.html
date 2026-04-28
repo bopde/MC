@@ -227,7 +227,7 @@ function renderBudgetAllocate() {
 
   Promise.all([
     serverCall('getInvoicesWithDetails', AppState.year),
-    serverCall('getAll', 'BudgetAllocations')
+    serverCall('getAllClient', 'BudgetAllocations')
   ]).then(function(results) {
     var invoices = results[0] || [];
     var existingAllocs = results[1] || [];

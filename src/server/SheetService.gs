@@ -3,6 +3,20 @@
  * All reads use batch operations (getDataRange) for performance.
  */
 
+var ALLOWED_CLIENT_SHEETS = ['Businesses', 'WorkCodes', 'Accounts', 'BudgetRules', 'BudgetAllocations'];
+
+/**
+ * Sanitise a cell value to prevent formula injection.
+ * Prefixes a leading single-quote when the value starts with =, +, -, or @.
+ */
+function sanitiseCell(val) {
+  if (typeof val !== 'string') return val;
+  if (val.length > 0 && '=+-@'.indexOf(val.charAt(0)) !== -1) {
+    return "'" + val;
+  }
+  return val;
+}
+
 /**
  * Get all rows from a sheet as an array of objects.
  * Keys are taken from the header row.
@@ -35,6 +49,16 @@ function getAll(sheetName) {
 }
 
 /**
+ * Client-safe wrapper: only allows reading whitelisted sheets.
+ */
+function getAllClient(sheetName) {
+  if (ALLOWED_CLIENT_SHEETS.indexOf(sheetName) === -1) {
+    throw new Error('Access denied: ' + sheetName);
+  }
+  return getAll(sheetName);
+}
+
+/**
  * Get active (non-deleted) rows from a reference table.
  */
 function getActive(sheetName) {
@@ -60,7 +84,7 @@ function appendRow(sheetName, data) {
   }
 
   var row = headers.map(function(h) {
-    return data[h] !== undefined ? data[h] : '';
+    return sanitiseCell(data[h] !== undefined ? data[h] : '');
   });
 
   sheet.appendRow(row);
@@ -78,7 +102,7 @@ function updateRow(sheetName, rowIndex, data) {
 
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var row = headers.map(function(h) {
-    return data[h] !== undefined ? data[h] : '';
+    return sanitiseCell(data[h] !== undefined ? data[h] : '');
   });
 
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);

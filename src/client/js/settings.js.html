@@ -183,7 +183,7 @@ function renderCodeSettings() {
   var content = document.getElementById('settings-tab-content');
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
-  serverCall('getAll', 'WorkCodes').then(function(codes) {
+  serverCall('getAllClient', 'WorkCodes').then(function(codes) {
     var html =
       '<details class="add-form-panel"><summary>+ Add New Work Code</summary><div>' +
       '<form id="add-code-form" onsubmit="submitWorkCode(event)">' +
@@ -251,7 +251,7 @@ function renderAccountSettings() {
   var content = document.getElementById('settings-tab-content');
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
-  serverCall('getAll', 'Accounts').then(function(accounts) {
+  serverCall('getAllClient', 'Accounts').then(function(accounts) {
     var html =
       '<details class="add-form-panel"><summary>+ Add New Account</summary><div>' +
       '<form id="add-acc-form" onsubmit="submitAccount(event)">' +

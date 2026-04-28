@@ -38,10 +38,19 @@ function updateAllocationStatusFromClient(params) {
  * @param {string} params - "sheetName|rowIndex|active"
  */
 function toggleEntityFromClient(params) {
+  var ALLOWED = ['Businesses', 'WorkCodes', 'Accounts'];
   var parts = params.split('|');
   var sheetName = parts[0];
   var rowIndex = parseInt(parts[1], 10);
   var active = parts[2] === 'true';
+
+  if (ALLOWED.indexOf(sheetName) === -1) {
+    throw new Error('Access denied: cannot toggle ' + sheetName);
+  }
+
+  if (isNaN(rowIndex) || rowIndex < 2) {
+    throw new Error('Invalid row index');
+  }
 
   var ss = getSpreadsheet();
   var sheet = ss.getSheetByName(sheetName);
