@@ -83,8 +83,14 @@
     color: var(--foam);
     text-transform: uppercase;
   }
-  body > nav ul:last-child { gap: 0; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
-  body > nav ul:last-child::-webkit-scrollbar { display: none; }
+  body > nav ul {
+    overflow: visible !important;
+    flex-wrap: wrap !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body > nav ul li { flex-shrink: 0; padding: 0; }
   body > nav a.nav-link {
     color: rgba(214,234,248,0.65);
     font-size: 0.72rem;
@@ -285,18 +291,17 @@
   /* ---- Filters ---- */
   .filters {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: end;
     flex-wrap: wrap;
     margin-bottom: 1rem;
-    padding: 0.75rem;
-    background: var(--white);
-    border: 1px solid var(--rule);
-    border-radius: 4px;
+    padding: 0;
+    background: transparent;
+    border: none;
   }
-  .filters label { margin-bottom: 0; }
-  .filters select, .filters input { margin-bottom: 0; }
-  .filters button { width: auto; }
+  .filters label { margin-bottom: 0; font-size: 0.75rem; }
+  .filters select, .filters input { margin-bottom: 0; min-height: 38px; }
+  .filters button { width: auto; min-height: 38px; padding: 0.35rem 0.75rem; }
 
   /* ---- Money flow tiles ---- */
   .flow-overview {
@@ -394,6 +399,11 @@
   .delta { font-size: 0.68rem; font-variant-numeric: tabular-nums; display: block; margin-top: 0.05rem; }
   .delta--up   { color: var(--sage); }
   .delta--down { color: var(--danger); }
+
+  /* ---- Account entry cards ---- */
+  .account-entry-card { padding: 0.85rem !important; }
+  .account-entry-card header { display: flex; justify-content: space-between; align-items: baseline; }
+  .account-entry-card .form-row { margin-top: 0.5rem; }
 
   /* ---- Preview card ---- */
   .preview-card header { border-bottom: 1px solid var(--rule-2); padding-bottom: 0.5rem; margin-bottom: 0.6rem; }
@@ -538,7 +548,6 @@
   }
 
   @media (max-width: 480px) {
-    body > nav ul:last-child { gap: 0; flex-wrap: nowrap; }
     body > nav a.nav-link { font-size: 0.6rem; padding: 0.3rem 0.35rem; }
     .tab-bar button { font-size: 0.65rem; padding: 0.5rem 0.65rem; }
     h2 { font-size: 1.2rem; }
