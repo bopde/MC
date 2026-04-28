@@ -63,8 +63,11 @@ function generateInvoice(params) {
   var gstAmount = includeGst ? Math.round(subtotal * gstRate * 100) / 100 : 0;
   var total = subtotal + gstAmount;
 
-  // Create the invoice
+  // Generate MMYY invoice ID
+  var invoiceId = generateInvoiceId();
+
   var invoice = appendRow('Invoices', {
+    invoice_id: invoiceId,
     business_id: params.businessId,
     date_from: params.dateFrom,
     date_to: params.dateTo,
@@ -295,4 +298,30 @@ function getInvoicesWithDetails(year) {
     inv.currency = biz ? biz.currency : 'NZD';
     return inv;
   });
+}
+
+/**
+ * Generate invoice ID in MMYY format (e.g. "0426" for April 2026).
+ * Subsequent invoices in the same month get a letter suffix: 0426a, 0426b, etc.
+ */
+function generateInvoiceId() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var now = new Date();
+    var mm = String(now.getMonth() + 1).padStart(2, '0');
+    var yy = String(now.getFullYear()).slice(-2);
+    var base = mm + yy;
+
+    var invoices = getAll('Invoices');
+    var pattern = new RegExp('^' + base + '[a-z]?$');
+    var sameMonth = invoices.filter(function(inv) {
+      return pattern.test(String(inv.invoice_id));
+    });
+
+    if (sameMonth.length === 0) return base;
+    return base + String.fromCharCode(96 + sameMonth.length);
+  } finally {
+    lock.releaseLock();
+  }
 }
