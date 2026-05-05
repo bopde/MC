@@ -11,7 +11,8 @@
  * @param {string} params - "invoiceId|newStatus"
  */
 function updateInvoiceStatusFromClient(params) {
-  var parts = params.split('|');
+  var parts = String(params).split('|');
+  if (parts.length < 2) throw new Error('Invalid parameters');
   return updateInvoiceStatus(parts[0], parts[1]);
 }
 
@@ -20,7 +21,8 @@ function updateInvoiceStatusFromClient(params) {
  * @param {string} params - "invoiceId|ruleId"
  */
 function allocateBudgetFromClient(params) {
-  var parts = params.split('|');
+  var parts = String(params).split('|');
+  if (parts.length < 2) throw new Error('Invalid parameters');
   return allocateBudget(parts[0], parts[1]);
 }
 
@@ -29,7 +31,8 @@ function allocateBudgetFromClient(params) {
  * @param {string} params - "allocationId|newStatus|transferDate"
  */
 function updateAllocationStatusFromClient(params) {
-  var parts = params.split('|');
+  var parts = String(params).split('|');
+  if (parts.length < 2) throw new Error('Invalid parameters');
   return updateAllocationStatus(parts[0], parts[1], parts[2] || null);
 }
 

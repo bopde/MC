@@ -37,7 +37,8 @@ function generateId(sheetName) {
       // Read all IDs in column A to find the max
       var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
       ids.forEach(function(row) {
-        var id = row[0].toString();
+        var id = (row[0] || '').toString();
+        if (!id) return;
         // Extract number from ID like "TE-042" or "INV-2026-042"
         var parts = id.split('-');
         var num = parseInt(parts[parts.length - 1], 10);

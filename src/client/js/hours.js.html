@@ -112,9 +112,12 @@ function filterContractsByBusiness(bizId) {
   });
   contractEl.innerHTML = html;
 
-  // Filter work codes if contract has specific codes
-  contractEl.addEventListener('change', function() {
-    var selected = contracts.find(function(c) { return c.contract_id === contractEl.value; });
+  // Replace listener to avoid stacking (clone trick)
+  var newEl = contractEl.cloneNode(true);
+  contractEl.parentNode.replaceChild(newEl, contractEl);
+
+  newEl.addEventListener('change', function() {
+    var selected = contracts.find(function(c) { return c.contract_id === newEl.value; });
     var codeEl = document.getElementById('te-code');
     if (!codeEl) return;
     if (selected && selected.work_codes) {

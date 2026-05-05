@@ -219,9 +219,10 @@ function dashChart(invoices, year, activeMonths) {
   invoices.forEach(function(inv) {
     if (inv.status === 'void') return;
     var cur = inv.currency || 'NZD';
-    var m = String(inv.created_date).match(/\d{4}-(\d{1,2})/);
+    var dateStr = String(inv.created_date || '');
+    var m = dateStr.match(/(\d{4})-(\d{1,2})/);
     if (!m) return;
-    var month = parseInt(m[1], 10);
+    var month = parseInt(m[2], 10);
     if (!byCur[cur]) byCur[cur] = {};
     byCur[cur][month] = (byCur[cur][month] || 0) + inv.total;
   });

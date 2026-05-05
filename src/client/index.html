@@ -11,7 +11,7 @@
   <?!= include('client/css/styles.css') ?>
 </head>
 <body>
-  <nav class="container-fluid">
+  <nav class="container-fluid" aria-label="Main navigation">
     <ul>
       <li><strong>Finance Tracker</strong></li>
     </ul>
@@ -26,7 +26,7 @@
   </nav>
 
   <main class="container">
-    <div id="loading" aria-busy="true" style="text-align:center;padding:2rem;">Loading...</div>
+    <div id="loading" aria-busy="true" role="status" aria-live="polite" style="text-align:center;padding:2rem;">Loading...</div>
     <div id="app-content" style="display:none;"></div>
   </main>
 
