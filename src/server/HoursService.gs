@@ -41,7 +41,8 @@ function addTimeEntry(data) {
     work_code: data.work_code,
     rate: rate,
     line_total: lineTotal,
-    invoice_id: ''
+    invoice_id: '',
+    contract_id: data.contract_id || ''
   });
 }
 

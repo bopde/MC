@@ -40,9 +40,15 @@ function setupSheets() {
     'MyDetails': [
       'key', 'value'
     ],
+    'Contracts': [
+      'contract_id', 'business_id', 'name', 'po_number',
+      'date_from', 'date_to', 'value', 'currency',
+      'work_codes', 'status', 'notes'
+    ],
     'TimeEntries': [
       'entry_id', 'business_id', 'date', 'time_start', 'time_end',
-      'hours', 'description', 'work_code', 'rate', 'line_total', 'invoice_id'
+      'hours', 'description', 'work_code', 'rate', 'line_total',
+      'invoice_id', 'contract_id'
     ],
     'Expenses': [
       'expense_id', 'business_id', 'date', 'amount', 'description',
@@ -51,8 +57,8 @@ function setupSheets() {
     'Invoices': [
       'invoice_id', 'business_id', 'date_from', 'date_to', 'created_date',
       'include_gst', 'gst_rate', 'subtotal', 'gst_amount', 'total',
-      'status', 'budget_rule_id', 'tax_withheld', 'description', 'notes',
-      'line_descriptions'
+      'status', 'budget_rule_id', 'contract_id', 'po_number',
+      'description', 'notes', 'line_descriptions'
     ],
     'BudgetAllocations': [
       'allocation_id', 'invoice_id', 'category', 'percentage',

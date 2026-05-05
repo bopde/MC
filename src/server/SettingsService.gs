@@ -12,12 +12,14 @@ function bootstrap() {
     workCodes: [],
     accounts: [],
     budgetRules: [],
+    contracts: [],
     myDetails: {}
   };
   try { result.businesses = getActive('Businesses'); } catch (e) {}
   try { result.workCodes = getActive('WorkCodes'); } catch (e) {}
   try { result.accounts = getActive('Accounts'); } catch (e) {}
   try { result.budgetRules = getAll('BudgetRules'); } catch (e) {}
+  try { result.contracts = getActiveContracts(); } catch (e) {}
   try { result.myDetails = getMyDetails(); } catch (e) { result.myDetails = {}; }
   return result;
 }

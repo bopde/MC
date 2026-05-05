@@ -8,6 +8,7 @@ var ID_PREFIXES = {
   'WorkCodes': 'WC',
   'Accounts': 'ACC',
   'BudgetRules': 'BR',
+  'Contracts': 'CON',
   'TimeEntries': 'TE',
   'Expenses': 'EXP',
   'Invoices': 'INV',

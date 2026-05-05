@@ -6,23 +6,27 @@
  * Get uninvoiced time entries and expenses for a business within a date range.
  * Called internally by generateInvoice. Client calls go through ClientWrappers.gs.
  */
-function getUninvoicedItemsInternal(businessId, dateFrom, dateTo) {
+function getUninvoicedItemsInternal(businessId, dateFrom, dateTo, contractId) {
   var from = new Date(dateFrom);
   var to = new Date(dateTo);
   to.setHours(23, 59, 59);
+  var conIdStr = contractId ? String(contractId) : '';
 
   var timeEntries = getAll('TimeEntries').filter(function(te) {
     var d = new Date(te.date);
-    return te.business_id === businessId &&
-           (!te.invoice_id || te.invoice_id === '') &&
-           d >= from && d <= to;
+    if (te.business_id !== businessId) return false;
+    if (te.invoice_id && te.invoice_id !== '') return false;
+    if (d < from || d > to) return false;
+    if (conIdStr && String(te.contract_id || '') !== conIdStr) return false;
+    return true;
   });
 
   var expenses = getAll('Expenses').filter(function(exp) {
     var d = new Date(exp.date);
-    return exp.business_id === businessId &&
-           (!exp.invoice_id || exp.invoice_id === '') &&
-           d >= from && d <= to;
+    if (exp.business_id !== businessId) return false;
+    if (exp.invoice_id && exp.invoice_id !== '') return false;
+    if (d < from || d > to) return false;
+    return true;
   });
 
   return { timeEntries: timeEntries, expenses: expenses };
@@ -39,7 +43,7 @@ function getUninvoicedItemsInternal(businessId, dateFrom, dateTo) {
  * @returns {Object} The created invoice
  */
 function generateInvoice(params) {
-  var items = getUninvoicedItemsInternal(params.businessId, params.dateFrom, params.dateTo);
+  var items = getUninvoicedItemsInternal(params.businessId, params.dateFrom, params.dateTo, params.contractId);
 
   if (items.timeEntries.length === 0 && items.expenses.length === 0) {
     throw new Error('No uninvoiced items found for the selected period.');
@@ -79,25 +83,30 @@ function generateInvoice(params) {
     total: total,
     status: 'draft',
     budget_rule_id: '',
-    tax_withheld: 0,
+    contract_id: params.contractId || '',
+    po_number: params.poNumber || '',
     description: params.description || '',
     notes: params.notes || '',
     line_descriptions: params.lineDescriptions ? JSON.stringify(params.lineDescriptions) : ''
   });
 
-  // Mark time entries as invoiced (look up column dynamically)
+  // Mark time entries as invoiced (force text format to preserve leading zeros)
   var ss = getSpreadsheet();
   var teSheet = ss.getSheetByName('TimeEntries');
   var teInvCol = getColumnIndex(teSheet, 'invoice_id');
   items.timeEntries.forEach(function(te) {
-    teSheet.getRange(te._rowIndex, teInvCol).setValue(invoice.invoice_id);
+    var cell = teSheet.getRange(te._rowIndex, teInvCol);
+    cell.setNumberFormat('@');
+    cell.setValue(invoice.invoice_id);
   });
 
   // Mark expenses as invoiced
   var expSheet = ss.getSheetByName('Expenses');
   var expInvCol = getColumnIndex(expSheet, 'invoice_id');
   items.expenses.forEach(function(exp) {
-    expSheet.getRange(exp._rowIndex, expInvCol).setValue(invoice.invoice_id);
+    var cell = expSheet.getRange(exp._rowIndex, expInvCol);
+    cell.setNumberFormat('@');
+    cell.setValue(invoice.invoice_id);
   });
 
   return invoice;
@@ -112,12 +121,16 @@ function getInvoiceDetails(invoiceId) {
 
   var business = findById('Businesses', invoice.business_id);
 
+  var invIdStr = String(invoiceId);
+  var invIdNum = invIdStr.replace(/^0+/, '');
   var timeEntries = getAll('TimeEntries').filter(function(te) {
-    return te.invoice_id === invoiceId;
+    var tid = String(te.invoice_id || '');
+    return tid === invIdStr || (tid !== '' && tid === invIdNum);
   });
 
   var expenses = getAll('Expenses').filter(function(exp) {
-    return exp.invoice_id === invoiceId;
+    var eid = String(exp.invoice_id || '');
+    return eid === invIdStr || (eid !== '' && eid === invIdNum);
   });
 
   // Parse stored line descriptions
@@ -190,8 +203,11 @@ function updateInvoiceStatus(invoiceId, newStatus) {
  * time entries and expenses so they can be re-invoiced.
  */
 function voidInvoice(invoice) {
+  var invIdStr = String(invoice.invoice_id);
+  var invIdNum = invIdStr.replace(/^0+/, '');
   var allocations = getAll('BudgetAllocations').filter(function(a) {
-    return a.invoice_id === invoice.invoice_id;
+    var aid = String(a.invoice_id || '');
+    return aid === invIdStr || (aid !== '' && aid === invIdNum);
   });
   if (allocations.length > 0) {
     throw new Error('Cannot void — this invoice has budget allocations. Remove them first.');
@@ -205,7 +221,8 @@ function voidInvoice(invoice) {
     var teInvCol = getColumnIndex(teSheet, 'invoice_id');
     var teAll = getAll('TimeEntries');
     teAll.forEach(function(te) {
-      if (te.invoice_id === invoice.invoice_id) {
+      var tid = String(te.invoice_id || '');
+      if (tid === invIdStr || (tid !== '' && tid === invIdNum)) {
         teSheet.getRange(te._rowIndex, teInvCol).setValue('');
       }
     });
@@ -217,7 +234,8 @@ function voidInvoice(invoice) {
     var expInvCol = getColumnIndex(expSheet, 'invoice_id');
     var expAll = getAll('Expenses');
     expAll.forEach(function(exp) {
-      if (exp.invoice_id === invoice.invoice_id) {
+      var eid = String(exp.invoice_id || '');
+      if (eid === invIdStr || (eid !== '' && eid === invIdNum)) {
         expSheet.getRange(exp._rowIndex, expInvCol).setValue('');
       }
     });

@@ -151,6 +151,7 @@ function renderInvoiceDetail(data) {
         '<div class="invoice-meta">' +
           '<div><span class="label">Date:</span> ' + formatDate(inv.created_date) + '</div>' +
           '<div><span class="label">Period:</span> ' + formatDate(inv.date_from) + ' &ndash; ' + formatDate(inv.date_to) + '</div>' +
+          (inv.po_number ? '<div><span class="label">PO #:</span> ' + escapeHtml(inv.po_number) + '</div>' : '') +
           '<div><span class="label">Status:</span> <span class="badge badge-' + escapeHtml(inv.status) + '">' + escapeHtml(inv.status) + '</span></div>' +
         '</div>' +
       '</header>' +
@@ -361,6 +362,9 @@ function renderCreateInvoice() {
     '<form id="create-invoice-form">' +
       '<div class="form-row">' +
         '<label>Business ' + buildSelect('inv-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
+        '<label>Contract <select id="inv-contract"><option value="">All (no filter)</option></select></label>' +
+      '</div>' +
+      '<div class="form-row">' +
         '<label>From <input type="date" id="inv-from" required></label>' +
         '<label>To <input type="date" id="inv-to" required value="' + todayStr() + '"></label>' +
       '</div>' +
@@ -373,12 +377,26 @@ function renderCreateInvoice() {
       '</div>' +
     '</form>' +
     '<div id="invoice-preview"></div>';
+
+  document.getElementById('inv-business').addEventListener('change', function() {
+    var bizId = this.value;
+    var contractEl = document.getElementById('inv-contract');
+    var contracts = (AppCache.contracts || []).filter(function(c) { return c.business_id === bizId; });
+    var html = '<option value="">All (no filter)</option>';
+    contracts.forEach(function(c) {
+      html += '<option value="' + escapeHtml(c.contract_id) + '">' + escapeHtml(c.name) +
+        (c.po_number ? ' (PO: ' + escapeHtml(c.po_number) + ')' : '') + '</option>';
+    });
+    contractEl.innerHTML = html;
+  });
 }
 
 function previewInvoice() {
   var bizId = document.getElementById('inv-business').value;
   var from = document.getElementById('inv-from').value;
   var to = document.getElementById('inv-to').value;
+  var contractEl = document.getElementById('inv-contract');
+  var contractId = contractEl ? contractEl.value : '';
 
   if (!bizId || !from || !to) {
     showToast('Please fill in all fields.', 'error');
@@ -392,7 +410,7 @@ function previewInvoice() {
   var gstRate = Number(document.getElementById('inv-gst-rate').value) / 100;
   var currency = getCurrencyForBusiness(bizId);
 
-  serverCall('getUninvoicedItems', { businessId: bizId, dateFrom: from, dateTo: to }).then(function(items) {
+  serverCall('getUninvoicedItems', { businessId: bizId, dateFrom: from, dateTo: to, contractId: contractId }).then(function(items) {
     if (items.timeEntries.length === 0 && items.expenses.length === 0) {
       preview.innerHTML = '<p class="muted">No uninvoiced items found for this period.</p>';
       return;
@@ -483,6 +501,10 @@ function confirmCreateInvoice() {
     }
   });
 
+  var contractEl = document.getElementById('inv-contract');
+  var contractId = contractEl ? contractEl.value : '';
+  var contract = contractId ? (AppCache.contracts || []).find(function(c) { return c.contract_id === contractId; }) : null;
+
   var params = {
     businessId: document.getElementById('inv-business').value,
     dateFrom: document.getElementById('inv-from').value,
@@ -491,7 +513,9 @@ function confirmCreateInvoice() {
     gstRate: Number(document.getElementById('inv-gst-rate').value) / 100,
     description: document.getElementById('inv-desc').value,
     notes: document.getElementById('inv-notes').value,
-    lineDescriptions: Object.keys(lineDescs).length > 0 ? lineDescs : undefined
+    lineDescriptions: Object.keys(lineDescs).length > 0 ? lineDescs : undefined,
+    contractId: contractId || undefined,
+    poNumber: contract ? contract.po_number : undefined
   };
 
   if (!confirm('Create this invoice? Time entries and expenses will be marked as invoiced.')) return;

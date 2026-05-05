@@ -72,5 +72,5 @@ function toggleEntityFromClient(params) {
  * can only pass a single argument (the params object).
  */
 function getUninvoicedItems(params) {
-  return getUninvoicedItemsInternal(params.businessId, params.dateFrom, params.dateTo);
+  return getUninvoicedItemsInternal(params.businessId, params.dateFrom, params.dateTo, params.contractId);
 }

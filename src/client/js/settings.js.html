@@ -9,6 +9,7 @@ function renderSettingsPage(container) {
     '<div class="tab-bar" id="settings-tabs">' +
       '<button class="active" onclick="showSettingsTab(\'mydetails\')">My Details</button>' +
       '<button onclick="showSettingsTab(\'businesses\')">Businesses</button>' +
+      '<button onclick="showSettingsTab(\'contracts\')">Contracts</button>' +
       '<button onclick="showSettingsTab(\'codes\')">Work Codes</button>' +
       '<button onclick="showSettingsTab(\'accounts\')">Accounts</button>' +
       '<button onclick="showSettingsTab(\'rules\')">Budget Rules</button>' +
@@ -21,12 +22,13 @@ function renderSettingsPage(container) {
 function showSettingsTab(tab) {
   var btns = document.querySelectorAll('#settings-tabs button');
   btns.forEach(function(btn) { btn.classList.remove('active'); });
-  var labels = { mydetails: 0, businesses: 1, codes: 2, accounts: 3, rules: 4 };
+  var labels = { mydetails: 0, businesses: 1, contracts: 2, codes: 3, accounts: 4, rules: 5 };
   btns[labels[tab]].classList.add('active');
 
   var renderers = {
     mydetails: renderMyDetailsSettings,
     businesses: renderBusinessSettings,
+    contracts: renderContractSettings,
     codes: renderCodeSettings,
     accounts: renderAccountSettings,
     rules: renderRuleSettings
@@ -456,5 +458,109 @@ function submitBudgetRule(event) {
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
+}
+
+// --- Contracts ---
+
+function renderContractSettings() {
+  var content = document.getElementById('settings-tab-content');
+  content.innerHTML = '<div aria-busy="true">Loading...</div>';
+
+  var businesses = AppCache.businesses || [];
+  var codes = AppCache.workCodes || [];
+
+  serverCall('getAllClient', 'Contracts').then(function(contracts) {
+    var html =
+      '<details class="add-form-panel"><summary>+ Add New Contract</summary><div>' +
+      '<form id="add-contract-form" onsubmit="submitContract(event)">' +
+        '<div class="form-row">' +
+          '<label>Business ' + buildSelect('con-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
+          '<label>Contract Name <input type="text" id="con-name" required placeholder="e.g. Phase 2 - Platform Build"></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>PO Number <input type="text" id="con-po" placeholder="e.g. PO-12345"></label>' +
+          '<label>Value <input type="number" id="con-value" step="0.01" required placeholder="Total contract value"></label>' +
+          '<label>Currency <select id="con-currency">' +
+            '<option value="NZD">NZD</option><option value="USD">USD</option>' +
+            '<option value="AUD">AUD</option><option value="GBP">GBP</option>' +
+            '<option value="EUR">EUR</option></select></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Start Date <input type="date" id="con-from" required></label>' +
+          '<label>End Date <input type="date" id="con-to" required></label>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<label>Work Codes (comma-separated, or leave blank for all) <input type="text" id="con-codes" placeholder="e.g. DEV, PM, DESIGN"></label>' +
+        '</div>' +
+        '<label>Notes <textarea id="con-notes" rows="2"></textarea></label>' +
+        '<div class="form-actions"><button type="submit">Add Contract</button></div>' +
+      '</form></div></details>';
+
+    if (contracts.length > 0) {
+      html += '<div class="scroll-x"><table class="data-table"><thead><tr>' +
+        '<th>Business</th><th>Name</th><th>PO #</th><th>Period</th>' +
+        '<th class="number">Value</th><th>Codes</th><th>Status</th><th>Actions</th>' +
+        '</tr></thead><tbody>';
+
+      var bizMap = {};
+      businesses.forEach(function(b) { bizMap[b.business_id] = b.name; });
+
+      contracts.forEach(function(c) {
+        var isActive = c.status === 'active';
+        html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
+          '<td>' + escapeHtml(bizMap[c.business_id] || c.business_id) + '</td>' +
+          '<td><strong>' + escapeHtml(c.name) + '</strong></td>' +
+          '<td>' + escapeHtml(c.po_number) + '</td>' +
+          '<td>' + formatDate(c.date_from) + ' &rarr; ' + formatDate(c.date_to) + '</td>' +
+          '<td class="number">' + formatCurrency(c.value, c.currency || 'NZD') + '</td>' +
+          '<td>' + escapeHtml(c.work_codes) + '</td>' +
+          '<td><span class="badge badge-' + (isActive ? 'paid' : 'void') + '">' + escapeHtml(c.status) + '</span></td>' +
+          '<td class="actions">' +
+            (isActive
+              ? '<button class="btn-small btn-subtle" onclick="completeContract(\'' + c.contract_id + '\')">Complete</button>'
+              : '') +
+          '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    } else {
+      html += '<p class="muted">No contracts yet. Add one above to track budget vs spend.</p>';
+    }
+
+    content.innerHTML = html;
+  }).catch(function(err) {
+    content.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function submitContract(event) {
+  event.preventDefault();
+  var data = {
+    business_id: document.getElementById('con-business').value,
+    name: document.getElementById('con-name').value,
+    po_number: document.getElementById('con-po').value,
+    value: document.getElementById('con-value').value,
+    currency: document.getElementById('con-currency').value,
+    date_from: document.getElementById('con-from').value,
+    date_to: document.getElementById('con-to').value,
+    work_codes: document.getElementById('con-codes').value,
+    notes: document.getElementById('con-notes').value
+  };
+
+  serverCall('addContract', data).then(function() {
+    showToast('Contract added!');
+    refreshReferenceData();
+    renderContractSettings();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+
+function completeContract(contractId) {
+  if (!confirm('Mark this contract as complete?')) return;
+  serverCall('updateContract', { contract_id: contractId, status: 'complete' }).then(function() {
+    showToast('Contract completed');
+    refreshReferenceData();
+    renderContractSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
 }
 </script>

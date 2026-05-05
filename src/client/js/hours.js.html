@@ -44,6 +44,7 @@ function renderTimeEntryTab() {
     '<form id="time-entry-form" onsubmit="submitTimeEntry(event)">' +
       '<div class="form-row">' +
         '<label>Business ' + buildSelect('te-business', businesses, 'business_id', 'name', { required: true, selected: bizSelected, placeholder: businesses.length === 1 ? false : 'Select...' }) + '</label>' +
+        '<label>Contract <select id="te-contract"><option value="">None</option></select></label>' +
         '<label>Date <input type="date" id="te-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
@@ -71,14 +72,17 @@ function renderTimeEntryTab() {
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
     '</section>';
 
-  // Auto-fill rate when business changes
+  // Auto-fill rate and filter contracts/codes when business changes
   document.getElementById('te-business').addEventListener('change', function() {
     var bizId = this.value;
     var biz = businesses.find(function(b) { return b.business_id === bizId; });
     if (biz && biz.default_rate) {
       document.getElementById('te-rate').value = biz.default_rate;
     }
+    filterContractsByBusiness(bizId);
   });
+
+  if (bizSelected) filterContractsByBusiness(bizSelected);
 
   // Auto-fill end time when start changes
   document.getElementById('te-start').addEventListener('change', function() {
@@ -94,6 +98,44 @@ function renderTimeEntryTab() {
   });
 
   filterTimeEntries();
+}
+
+function filterContractsByBusiness(bizId) {
+  var contractEl = document.getElementById('te-contract');
+  if (!contractEl) return;
+  var contracts = (AppCache.contracts || []).filter(function(c) {
+    return c.business_id === bizId;
+  });
+  var html = '<option value="">None</option>';
+  contracts.forEach(function(c) {
+    html += '<option value="' + escapeHtml(c.contract_id) + '">' + escapeHtml(c.name) + '</option>';
+  });
+  contractEl.innerHTML = html;
+
+  // Filter work codes if contract has specific codes
+  contractEl.addEventListener('change', function() {
+    var selected = contracts.find(function(c) { return c.contract_id === contractEl.value; });
+    var codeEl = document.getElementById('te-code');
+    if (!codeEl) return;
+    if (selected && selected.work_codes) {
+      var allowedCodes = String(selected.work_codes).split(',').map(function(s) { return s.trim(); });
+      var allCodes = AppCache.workCodes || [];
+      var filtered = allCodes.filter(function(c) { return allowedCodes.indexOf(c.code_id) !== -1; });
+      if (filtered.length > 0) {
+        codeEl.innerHTML = buildCodeSelectOptions(filtered);
+        return;
+      }
+    }
+    codeEl.innerHTML = buildCodeSelectOptions(AppCache.workCodes || []);
+  });
+}
+
+function buildCodeSelectOptions(codes) {
+  var html = '<option value="">Select...</option>';
+  codes.forEach(function(c) {
+    html += '<option value="' + escapeHtml(c.code_id) + '">' + escapeHtml(c.code_id + ' - ' + c.description) + '</option>';
+  });
+  return html;
 }
 
 function filterTimeEntries() {
@@ -157,7 +199,11 @@ function renderTimeEntriesTable(entries) {
     return;
   }
 
-  entries.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  entries.sort(function(a, b) {
+    var d = new Date(b.date) - new Date(a.date);
+    if (d !== 0) return d;
+    return (b.time_start || '').localeCompare(a.time_start || '');
+  });
 
   var totalHours = entries.reduce(function(s, e) { return s + (Number(e.hours) || 0); }, 0);
   var totalAmount = entries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0);
@@ -200,6 +246,7 @@ function renderTimeEntriesTable(entries) {
 
 function submitTimeEntry(event) {
   event.preventDefault();
+  var contractEl = document.getElementById('te-contract');
   var data = {
     business_id: document.getElementById('te-business').value,
     date: document.getElementById('te-date').value,
@@ -207,7 +254,8 @@ function submitTimeEntry(event) {
     time_end: document.getElementById('te-end').value,
     work_code: document.getElementById('te-code').value,
     rate: document.getElementById('te-rate').value,
-    description: document.getElementById('te-desc').value
+    description: document.getElementById('te-desc').value,
+    contract_id: contractEl ? contractEl.value : ''
   };
 
   var btn = event.target.querySelector('button[type="submit"]');

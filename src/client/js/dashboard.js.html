@@ -70,8 +70,12 @@ function loadDashboard() {
   var el = document.getElementById('dash-content');
   if (el) el.innerHTML = '<div aria-busy="true">Loading dashboard...</div>';
 
-  serverCall('getDashboardData', _dashYear).then(function(data) {
-    _dashData = data;
+  var dashPromise = serverCall('getDashboardData', _dashYear);
+  var contractPromise = serverCall('getContractProgress');
+
+  Promise.all([dashPromise, contractPromise]).then(function(results) {
+    _dashData = results[0];
+    _dashData.contractProgress = results[1] || [];
     renderDashContent();
   }).catch(function(err) {
     if (el) el.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
@@ -109,6 +113,9 @@ function renderDashContent() {
 
   var html = '';
   html += dashTiles(invoices, allInvoices, data.budget || [], data.accountBalances || [], timeEntries, bizMap);
+  if (data.contractProgress && data.contractProgress.length > 0) {
+    html += dashContracts(data.contractProgress);
+  }
   html += dashChart(allInvoices, year, months);
   html += '<div class="dash-columns">';
   html += dashOverdue(allInvoices);
@@ -368,6 +375,43 @@ function dashHours(timeEntries, bizMap) {
   }
 
   html += '</article>';
+  return html;
+}
+
+function dashContracts(contracts) {
+  var html = '<article><header><h3 style="margin:0;">Contract Progress</h3></header>' +
+    '<div class="dash-budget-grid">';
+
+  contracts.forEach(function(c) {
+    var pct = c.value > 0 ? Math.min(Math.round(c.actual_pct * 100), 100) : 0;
+    var expectedPct = Math.round(c.expected_pct * 100);
+    var remaining = c.value - c.spent;
+
+    var status = 'sage';
+    if (pct >= 90) status = 'danger';
+    else if (pct > expectedPct + 10) status = 'warn';
+
+    html += '<div class="dash-budget-item">' +
+      '<div class="dash-budget-item__header">' +
+        '<span>' + escapeHtml(c.business_name) + '</span>' +
+        '<span class="muted">' + escapeHtml(c.name) + '</span>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:0.25rem;">' +
+        '<span>' + formatCurrency(c.spent, c.currency) + ' / ' + formatCurrency(c.value, c.currency) + '</span>' +
+        '<span>' + c.hours.toFixed(1) + ' hrs</span>' +
+      '</div>' +
+      '<div class="progress-bar" style="position:relative;">' +
+        '<div class="progress-bar__fill" style="width:' + pct + '%;background:var(--' + status + ');"></div>' +
+        '<div style="position:absolute;left:' + expectedPct + '%;top:-1px;width:1px;height:5px;background:var(--ocean);"></div>' +
+      '</div>' +
+      '<div class="dash-budget-item__detail">' +
+        '<span>' + pct + '% spent' + (c.po_number ? ' &middot; PO ' + escapeHtml(c.po_number) : '') + '</span>' +
+        '<span>' + c.days_remaining + 'd remaining</span>' +
+      '</div>' +
+    '</div>';
+  });
+
+  html += '</div></article>';
   return html;
 }
 

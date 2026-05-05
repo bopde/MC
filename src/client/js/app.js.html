@@ -68,6 +68,7 @@ var App = {
     // Render if this is the first visit
     var container = document.getElementById('page-' + hash);
     if (!App.rendered[hash]) {
+      container.classList.add('page-entering');
       container.innerHTML =
         '<header class="page-header"><h2>' + page.title + '</h2></header>' +
         '<div class="page-body"></div>';
@@ -79,6 +80,9 @@ var App = {
         console.error('Render error for ' + hash, e);
         body.innerHTML = '<article><p>Error rendering page: ' + escapeHtml(e.message) + '</p></article>';
       }
+      container.addEventListener('animationend', function() {
+        container.classList.remove('page-entering');
+      }, { once: true });
     }
   },
 

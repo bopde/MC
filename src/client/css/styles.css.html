@@ -121,7 +121,7 @@
   footer.container { color: var(--muted); padding: 1.5rem 0; font-size: 0.75rem; }
 
   /* ---- Page shell ---- */
-  .page-container { animation: fadeIn 0.18s ease; }
+  .page-container.page-entering { animation: fadeIn 0.15s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
   .page-header {
@@ -284,7 +284,7 @@
     margin-bottom: 1rem;
   }
 
-  input, select, textarea {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
     background: var(--white) !important;
     border: 1px solid var(--rule) !important;
     border-radius: 2px;
@@ -292,9 +292,13 @@
     font-size: 16px !important; /* prevents iOS zoom */
     min-height: 44px; /* touch target */
   }
-  input:focus, select:focus, textarea:focus {
+  input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
     border-color: var(--sky) !important;
     box-shadow: 0 0 0 3px rgba(74,144,184,0.15) !important;
+  }
+  input[type="checkbox"], input[type="radio"] {
+    min-height: auto;
+    cursor: pointer;
   }
   label { font-size: 0.82rem; font-weight: 500; color: var(--ocean); }
 
@@ -625,9 +629,17 @@
 
   /* ---- Mobile ---- */
   @media (max-width: 768px) {
-    body > nav { padding: 0.7rem 1rem; }
+    body > nav { padding: 0.7rem 1rem; flex-wrap: wrap; }
     body > nav strong { font-size: 1rem; }
-    body > nav a.nav-link { font-size: 0.65rem; padding: 0.35rem 0.45rem; letter-spacing: 0.1em; }
+    body > nav > ul:last-child {
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      width: 100%;
+    }
+    body > nav > ul:last-child::-webkit-scrollbar { display: none; }
+    body > nav a.nav-link { font-size: 0.65rem; padding: 0.35rem 0.55rem; letter-spacing: 0.1em; white-space: nowrap; }
     main.container { padding: 1rem 0.75rem 2rem; }
     .page-header { margin-bottom: 0.75rem; }
     .page-header h2 { font-size: 1.3rem; }
@@ -648,7 +660,7 @@
   }
 
   @media (max-width: 480px) {
-    body > nav a.nav-link { font-size: 0.6rem; padding: 0.3rem 0.35rem; }
+    body > nav a.nav-link { font-size: 0.62rem; padding: 0.3rem 0.5rem; }
     .tab-bar button { font-size: 0.65rem; padding: 0.5rem 0.65rem; }
     h2 { font-size: 1.2rem; }
     .flow-tile__value { font-size: 1.4rem; }

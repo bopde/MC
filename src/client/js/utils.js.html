@@ -19,6 +19,7 @@ var AppCache = {
   workCodes: null,
   accounts: null,
   budgetRules: null,
+  contracts: null,
   myDetails: null,
 
   clear: function() {
@@ -26,6 +27,7 @@ var AppCache = {
     this.workCodes = null;
     this.accounts = null;
     this.budgetRules = null;
+    this.contracts = null;
     this.myDetails = null;
   }
 };
@@ -194,6 +196,7 @@ function loadReferenceData() {
     AppCache.workCodes = data.workCodes || [];
     AppCache.accounts = data.accounts || [];
     AppCache.budgetRules = data.budgetRules || [];
+    AppCache.contracts = data.contracts || [];
     AppCache.myDetails = data.myDetails || {};
   }).catch(function(err) {
     console.warn('[bootstrap] Failed, falling back to empty cache:', err.message);
@@ -201,6 +204,7 @@ function loadReferenceData() {
     AppCache.workCodes = AppCache.workCodes || [];
     AppCache.accounts = AppCache.accounts || [];
     AppCache.budgetRules = AppCache.budgetRules || [];
+    AppCache.contracts = AppCache.contracts || [];
     AppCache.myDetails = AppCache.myDetails || {};
     throw err;
   });
@@ -214,7 +218,7 @@ function loadReferenceData() {
 function refreshReferenceData() {
   return loadReferenceData().then(function() {
     if (typeof App !== 'undefined' && App.invalidate) {
-      App.invalidate(['dashboard', 'hours', 'invoices', 'budget', 'accounts']);
+      App.invalidate(['dashboard', 'hours', 'invoices', 'budget', 'accounts', 'settings']);
     }
   });
 }

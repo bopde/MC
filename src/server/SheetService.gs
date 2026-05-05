@@ -3,7 +3,7 @@
  * All reads use batch operations (getDataRange) for performance.
  */
 
-var ALLOWED_CLIENT_SHEETS = ['Businesses', 'WorkCodes', 'Accounts', 'BudgetRules', 'BudgetAllocations'];
+var ALLOWED_CLIENT_SHEETS = ['Businesses', 'WorkCodes', 'Accounts', 'BudgetRules', 'BudgetAllocations', 'Contracts'];
 
 /**
  * Sanitise a cell value to prevent formula injection.
@@ -88,7 +88,12 @@ function appendRow(sheetName, data) {
   });
 
   sheet.appendRow(row);
-  data._rowIndex = sheet.getLastRow();
+  var newRow = sheet.getLastRow();
+  data._rowIndex = newRow;
+
+  // Force text format on the ID column to preserve leading zeros
+  sheet.getRange(newRow, 1).setNumberFormat('@');
+
   return data;
 }
 
@@ -120,8 +125,12 @@ function findById(sheetName, id) {
   var keys = Object.keys(rows[0]).filter(function(k) { return k !== '_rowIndex'; });
   var idField = keys[0];
 
+  var idStr = String(id);
   for (var i = 0; i < rows.length; i++) {
-    if (rows[i][idField] === id) return rows[i];
+    var rowId = String(rows[i][idField]);
+    if (rowId === idStr) return rows[i];
+    // Handle leading-zero stripping (e.g. "0526" stored as 526)
+    if (idStr.charAt(0) === '0' && rowId === idStr.replace(/^0+/, '')) return rows[i];
   }
   return null;
 }
