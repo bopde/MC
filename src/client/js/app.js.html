@@ -48,7 +48,7 @@ var App = {
   },
 
   route: function() {
-    var hash = window.location.hash.replace('#', '') || 'dashboard';
+    var hash = window.location.hash.replace('#', '') || 'hours';
     var page = App.pages[hash];
     if (!page) { window.location.hash = '#hours'; return; }
 

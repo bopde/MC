@@ -62,7 +62,7 @@ function inPeriod(dateStr, year, months) {
   if (!dateStr) return false;
   var s = String(dateStr);
   var m = s.match(/^(\d{4})-(\d{1,2})/);
-  if (!m || m[1] !== String(year)) return false;
+  if (!m || m[1] !== year) return false;
   return months.indexOf(parseInt(m[2], 10)) !== -1;
 }
 
@@ -86,44 +86,49 @@ function renderDashContent() {
   var year = _dashYear;
   var months = getPeriodMonths(_dashPeriod, year);
 
-  var invoices = data.invoices.filter(function(inv) {
+  var invoices = (data.invoices || []).filter(function(inv) {
     return inPeriod(inv.created_date, year, months);
   });
-  var timeEntries = data.timeEntries.filter(function(te) {
+  var timeEntries = (data.timeEntries || []).filter(function(te) {
     return inPeriod(te.date, year, months);
   });
-  var expenses = data.expenses.filter(function(exp) {
-    return inPeriod(exp.date, year, months);
-  });
 
-  var allInvoices = data.invoices;
+  var allInvoices = data.invoices || [];
 
-  if (allInvoices.length === 0 && data.timeEntries.length === 0 && data.accountBalances.length === 0) {
+  // Build business lookup map once
+  var bizMap = {};
+  if (AppCache.businesses) {
+    AppCache.businesses.forEach(function(b) { bizMap[b.business_id] = b; });
+  }
+
+  if (allInvoices.length === 0 && (data.timeEntries || []).length === 0 && (data.accountBalances || []).length === 0) {
     el.innerHTML = '<article class="empty-state"><h3>Welcome to your dashboard</h3>' +
       '<p class="muted">Start tracking hours and creating invoices to see your financial overview here.</p></article>';
     return;
   }
 
   var html = '';
-  html += dashTiles(invoices, allInvoices, data.budget, data.accountBalances, timeEntries);
-  html += dashChart(data.invoices, year, months);
+  html += dashTiles(invoices, allInvoices, data.budget || [], data.accountBalances || [], timeEntries, bizMap);
+  html += dashChart(allInvoices, year, months);
   html += '<div class="dash-columns">';
   html += dashOverdue(allInvoices);
-  html += dashHours(timeEntries);
+  html += dashHours(timeEntries, bizMap);
   html += '</div>';
-  if (data.budget.length > 0) {
+  if (data.budget && data.budget.length > 0) {
     html += dashBudget(data.budget);
   }
 
   el.innerHTML = html;
 }
 
-function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries) {
+function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries, bizMap) {
   var revByCur = {};
+  var invCountByCur = {};
   invoices.forEach(function(inv) {
     if (inv.status === 'void') return;
     var cur = inv.currency || 'NZD';
     revByCur[cur] = (revByCur[cur] || 0) + inv.total;
+    invCountByCur[cur] = (invCountByCur[cur] || 0) + 1;
   });
 
   var unpaidByCur = {};
@@ -136,26 +141,19 @@ function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries) 
   });
 
   var taxOwed = 0;
-  (budget || []).forEach(function(b) {
+  budget.forEach(function(b) {
     if (b.category.indexOf('Tax') !== -1 || b.category.indexOf('ACC') !== -1) {
       taxOwed += b.outstanding;
     }
   });
 
   var totalHours = 0;
-  var earnedByCur = {};
   timeEntries.forEach(function(te) {
     totalHours += te.hours;
-    var cur = 'NZD';
-    if (AppCache.businesses) {
-      var biz = AppCache.businesses.find(function(b) { return b.business_id === te.business_id; });
-      if (biz) cur = biz.currency || 'NZD';
-    }
-    earnedByCur[cur] = (earnedByCur[cur] || 0) + te.line_total;
   });
 
   var cashByCur = {};
-  (accountBalances || []).forEach(function(ab) {
+  accountBalances.forEach(function(ab) {
     cashByCur[ab.currency] = (cashByCur[ab.currency] || 0) + ab.balance;
   });
 
@@ -172,7 +170,7 @@ function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries) 
     revCurs.forEach(function(cur) {
       html += dashTile('Revenue' + (revCurs.length > 1 ? ' (' + cur + ')' : ''),
         formatCurrency(revByCur[cur], cur),
-        invoices.filter(function(i) { return i.status !== 'void'; }).length + ' invoices', 'paid');
+        (invCountByCur[cur] || 0) + ' invoices', 'paid');
     });
   } else {
     html += dashTile('Revenue', formatCurrency(0), 'no invoices this period', 'paid');
@@ -287,12 +285,16 @@ function dashCompact(amount, cur) {
 
 function dashOverdue(invoices) {
   var now = new Date();
-  var overdue = invoices.filter(function(inv) {
-    if (inv.status !== 'sent') return false;
+  var overdue = [];
+  invoices.forEach(function(inv) {
+    if (inv.status !== 'sent') return;
     var d = new Date(inv.created_date);
-    inv._days = Math.floor((now - d) / 86400000);
-    return inv._days > 14;
-  }).sort(function(a, b) { return b._days - a._days; });
+    var days = Math.floor((now - d) / 86400000);
+    if (days > 14) {
+      overdue.push({ invoice_id: inv.invoice_id, business_name: inv.business_name, total: inv.total, currency: inv.currency, days: days });
+    }
+  });
+  overdue.sort(function(a, b) { return b.days - a.days; });
 
   var html = '<article><header><h3 style="margin:0;">Overdue Invoices</h3></header>';
 
@@ -307,7 +309,7 @@ function dashOverdue(invoices) {
         '<td><a href="#invoices"><strong>' + escapeHtml(inv.invoice_id) + '</strong></a></td>' +
         '<td>' + escapeHtml(inv.business_name) + '</td>' +
         '<td class="number">' + formatCurrency(inv.total, inv.currency) + '</td>' +
-        '<td><span class="badge" style="background:var(--danger-bg);color:var(--danger);">' + inv._days + 'd</span></td>' +
+        '<td><span class="badge" style="background:var(--danger-bg);color:var(--danger);">' + inv.days + 'd</span></td>' +
         '</tr>';
     });
     html += '</tbody></table>';
@@ -317,19 +319,17 @@ function dashOverdue(invoices) {
   return html;
 }
 
-function dashHours(timeEntries) {
+function dashHours(timeEntries, bizMap) {
   var byBiz = {};
   var totalHrs = 0;
   var totalByCur = {};
 
   timeEntries.forEach(function(te) {
     var bizId = te.business_id;
-    var name = 'Unknown';
-    var cur = 'NZD';
-    if (AppCache.businesses) {
-      var biz = AppCache.businesses.find(function(b) { return b.business_id === bizId; });
-      if (biz) { name = biz.name; cur = biz.currency || 'NZD'; }
-    }
+    var biz = bizMap[bizId];
+    var name = biz ? biz.name : 'Unknown';
+    var cur = biz ? (biz.currency || 'NZD') : 'NZD';
+
     if (!byBiz[bizId]) byBiz[bizId] = { name: name, currency: cur, hours: 0, earned: 0 };
     byBiz[bizId].hours += te.hours;
     byBiz[bizId].earned += te.line_total;
