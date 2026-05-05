@@ -13,11 +13,12 @@ var App = {
   rendered: {},  // pageName -> true once initial render done
 
   pages: {
-    hours:    { title: 'Hours & Expenses',   render: 'renderHoursPage' },
-    invoices: { title: 'Invoices',           render: 'renderInvoicesPage' },
-    budget:   { title: 'Budget',             render: 'renderBudgetPage' },
-    accounts: { title: 'Accounts',           render: 'renderAccountsPage' },
-    settings: { title: 'Settings',           render: 'renderSettingsPage' }
+    dashboard: { title: 'Dashboard',          render: 'renderDashboardPage' },
+    hours:     { title: 'Hours & Expenses',   render: 'renderHoursPage' },
+    invoices:  { title: 'Invoices',           render: 'renderInvoicesPage' },
+    budget:    { title: 'Budget',             render: 'renderBudgetPage' },
+    accounts:  { title: 'Accounts',           render: 'renderAccountsPage' },
+    settings:  { title: 'Settings',           render: 'renderSettingsPage' }
   },
 
   init: function() {
@@ -47,7 +48,7 @@ var App = {
   },
 
   route: function() {
-    var hash = window.location.hash.replace('#', '') || 'hours';
+    var hash = window.location.hash.replace('#', '') || 'dashboard';
     var page = App.pages[hash];
     if (!page) { window.location.hash = '#hours'; return; }
 

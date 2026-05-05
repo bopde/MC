@@ -214,7 +214,7 @@ function loadReferenceData() {
 function refreshReferenceData() {
   return loadReferenceData().then(function() {
     if (typeof App !== 'undefined' && App.invalidate) {
-      App.invalidate(['hours', 'invoices', 'budget', 'accounts']);
+      App.invalidate(['dashboard', 'hours', 'invoices', 'budget', 'accounts']);
     }
   });
 }

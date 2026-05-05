@@ -370,7 +370,7 @@ function confirmAllocation() {
 
   serverCall('allocateBudgetFromClient', invoiceId + '|' + ruleId).then(function() {
     showToast('Budget allocated');
-    App.invalidate(['budget']);
+    App.invalidate(['budget', 'dashboard']);
     showBudgetTab('summary');
   }).catch(function(err) {
     showToast(err.message, 'error');

@@ -544,6 +544,68 @@
   @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
+  /* ---- Dashboard ---- */
+  .dash-filters {
+    display: flex;
+    gap: 0.75rem;
+    align-items: end;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+  .dash-filters label { font-size: 0.75rem; margin-bottom: 0; }
+  .dash-filters input { margin-bottom: 0; min-height: 38px; }
+
+  .period-pills { display: flex; gap: 0.25rem; flex-wrap: wrap; align-self: end; }
+  .period-pill {
+    padding: 0.3rem 0.7rem !important;
+    min-height: 36px !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: transparent !important;
+    color: var(--muted) !important;
+    border: 1px solid var(--rule) !important;
+    cursor: pointer;
+    transition: all 0.15s;
+    width: auto !important;
+  }
+  .period-pill:hover { color: var(--ocean) !important; border-color: var(--sky) !important; }
+  .period-pill.active {
+    background: var(--ocean) !important;
+    color: var(--foam) !important;
+    border-color: var(--ocean) !important;
+  }
+
+  .dash-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .dash-chart { margin-bottom: 1rem; }
+  .revenue-chart { display: block; width: 100%; min-height: 120px; }
+  .flow-tile--warn { border-left-color: var(--warn); }
+
+  .dash-budget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+  }
+  .dash-budget-item {
+    padding: 0.6rem 0.75rem;
+    background: var(--cream);
+    border-radius: 4px;
+  }
+  .dash-budget-item__header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+  }
+  .dash-budget-item__detail {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+  }
+
   /* ---- Print ---- */
   @page { margin: 1.5cm 1.5cm 1cm; }
   @media print {
@@ -578,6 +640,8 @@
     .invoice-meta { text-align: left; }
     .flow-overview { grid-template-columns: 1fr; }
     .flow-grid { grid-template-columns: 1fr; }
+    .dash-columns { grid-template-columns: 1fr; }
+    .dash-budget-grid { grid-template-columns: 1fr; }
     table { font-size: 0.8rem; }
     table td, table th { padding: 0.4rem 0.45rem; }
     .toast { left: 0.75rem; right: 0.75rem; }

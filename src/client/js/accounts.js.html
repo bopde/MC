@@ -160,7 +160,7 @@ function saveMonthlySummaries(event) {
   Promise.all(promises).then(function() {
     showToast('Saved ' + saving + ' account row' + (saving === 1 ? '' : 's'));
     if (status) status.textContent = 'Saved.';
-    App.invalidate(['accounts']);
+    App.invalidate(['accounts', 'dashboard']);
   }).catch(function(err) {
     showToast(err.message, 'error');
     if (status) status.textContent = '';

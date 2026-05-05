@@ -1,0 +1,398 @@
+<script>
+var _dashData = null;
+var _dashPeriod = 'ytd';
+var _dashYear = new Date().getFullYear().toString();
+
+function renderDashboardPage(container) {
+  container.innerHTML =
+    '<div class="dash-filters">' +
+      '<label>Year ' + buildYearSelect('dash-year', _dashYear) + '</label>' +
+      '<div class="period-pills" id="dash-pills">' + buildPills(_dashPeriod) + '</div>' +
+    '</div>' +
+    '<div id="dash-content"><div aria-busy="true">Loading dashboard...</div></div>';
+
+  document.getElementById('dash-year').addEventListener('change', function() {
+    _dashYear = this.value;
+    AppState.year = this.value;
+    loadDashboard();
+  });
+
+  loadDashboard();
+}
+
+function buildPills(active) {
+  var pills = [
+    { id: 'ytd', label: 'YTD' },
+    { id: 'q1', label: 'Q1' },
+    { id: 'q2', label: 'Q2' },
+    { id: 'q3', label: 'Q3' },
+    { id: 'q4', label: 'Q4' },
+    { id: 'all', label: 'Full Year' }
+  ];
+  return pills.map(function(p) {
+    return '<button class="period-pill' + (p.id === active ? ' active' : '') +
+           '" onclick="setDashPeriod(\'' + p.id + '\')">' + p.label + '</button>';
+  }).join('');
+}
+
+function setDashPeriod(period) {
+  _dashPeriod = period;
+  document.getElementById('dash-pills').innerHTML = buildPills(period);
+  if (_dashData) renderDashContent();
+}
+
+function getPeriodMonths(period, year) {
+  var now = new Date();
+  var isCurrentYear = (year === String(now.getFullYear()));
+  switch (period) {
+    case 'q1': return [1,2,3];
+    case 'q2': return [4,5,6];
+    case 'q3': return [7,8,9];
+    case 'q4': return [10,11,12];
+    case 'ytd':
+      var limit = isCurrentYear ? (now.getMonth() + 1) : 12;
+      var m = [];
+      for (var i = 1; i <= limit; i++) m.push(i);
+      return m;
+    default: return [1,2,3,4,5,6,7,8,9,10,11,12];
+  }
+}
+
+function inPeriod(dateStr, year, months) {
+  if (!dateStr) return false;
+  var s = String(dateStr);
+  var m = s.match(/^(\d{4})-(\d{1,2})/);
+  if (!m || m[1] !== String(year)) return false;
+  return months.indexOf(parseInt(m[2], 10)) !== -1;
+}
+
+function loadDashboard() {
+  var el = document.getElementById('dash-content');
+  if (el) el.innerHTML = '<div aria-busy="true">Loading dashboard...</div>';
+
+  serverCall('getDashboardData', _dashYear).then(function(data) {
+    _dashData = data;
+    renderDashContent();
+  }).catch(function(err) {
+    if (el) el.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+  });
+}
+
+function renderDashContent() {
+  var el = document.getElementById('dash-content');
+  if (!el || !_dashData) return;
+
+  var data = _dashData;
+  var year = _dashYear;
+  var months = getPeriodMonths(_dashPeriod, year);
+
+  var invoices = data.invoices.filter(function(inv) {
+    return inPeriod(inv.created_date, year, months);
+  });
+  var timeEntries = data.timeEntries.filter(function(te) {
+    return inPeriod(te.date, year, months);
+  });
+  var expenses = data.expenses.filter(function(exp) {
+    return inPeriod(exp.date, year, months);
+  });
+
+  var allInvoices = data.invoices;
+
+  if (allInvoices.length === 0 && data.timeEntries.length === 0 && data.accountBalances.length === 0) {
+    el.innerHTML = '<article class="empty-state"><h3>Welcome to your dashboard</h3>' +
+      '<p class="muted">Start tracking hours and creating invoices to see your financial overview here.</p></article>';
+    return;
+  }
+
+  var html = '';
+  html += dashTiles(invoices, allInvoices, data.budget, data.accountBalances, timeEntries);
+  html += dashChart(data.invoices, year, months);
+  html += '<div class="dash-columns">';
+  html += dashOverdue(allInvoices);
+  html += dashHours(timeEntries);
+  html += '</div>';
+  if (data.budget.length > 0) {
+    html += dashBudget(data.budget);
+  }
+
+  el.innerHTML = html;
+}
+
+function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries) {
+  var revByCur = {};
+  invoices.forEach(function(inv) {
+    if (inv.status === 'void') return;
+    var cur = inv.currency || 'NZD';
+    revByCur[cur] = (revByCur[cur] || 0) + inv.total;
+  });
+
+  var unpaidByCur = {};
+  var unpaidCount = 0;
+  allInvoices.forEach(function(inv) {
+    if (inv.status !== 'sent') return;
+    var cur = inv.currency || 'NZD';
+    unpaidByCur[cur] = (unpaidByCur[cur] || 0) + inv.total;
+    unpaidCount++;
+  });
+
+  var taxOwed = 0;
+  (budget || []).forEach(function(b) {
+    if (b.category.indexOf('Tax') !== -1 || b.category.indexOf('ACC') !== -1) {
+      taxOwed += b.outstanding;
+    }
+  });
+
+  var totalHours = 0;
+  var earnedByCur = {};
+  timeEntries.forEach(function(te) {
+    totalHours += te.hours;
+    var cur = 'NZD';
+    if (AppCache.businesses) {
+      var biz = AppCache.businesses.find(function(b) { return b.business_id === te.business_id; });
+      if (biz) cur = biz.currency || 'NZD';
+    }
+    earnedByCur[cur] = (earnedByCur[cur] || 0) + te.line_total;
+  });
+
+  var cashByCur = {};
+  (accountBalances || []).forEach(function(ab) {
+    cashByCur[ab.currency] = (cashByCur[ab.currency] || 0) + ab.balance;
+  });
+
+  var html = '<section class="flow-overview">';
+
+  var cashCurs = Object.keys(cashByCur);
+  cashCurs.forEach(function(cur) {
+    html += dashTile('Cash Position' + (cashCurs.length > 1 ? ' (' + cur + ')' : ''),
+      formatCurrency(cashByCur[cur], cur), accountBalances.length + ' accounts', 'total');
+  });
+
+  var revCurs = Object.keys(revByCur);
+  if (revCurs.length > 0) {
+    revCurs.forEach(function(cur) {
+      html += dashTile('Revenue' + (revCurs.length > 1 ? ' (' + cur + ')' : ''),
+        formatCurrency(revByCur[cur], cur),
+        invoices.filter(function(i) { return i.status !== 'void'; }).length + ' invoices', 'paid');
+    });
+  } else {
+    html += dashTile('Revenue', formatCurrency(0), 'no invoices this period', 'paid');
+  }
+
+  var unpaidCurs = Object.keys(unpaidByCur);
+  if (unpaidCurs.length > 0) {
+    unpaidCurs.forEach(function(cur) {
+      html += dashTile('Unpaid' + (unpaidCurs.length > 1 ? ' (' + cur + ')' : ''),
+        formatCurrency(unpaidByCur[cur], cur),
+        unpaidCount + ' sent', 'outstanding');
+    });
+  }
+
+  if (taxOwed > 0) {
+    html += dashTile('Tax & ACC Owed', formatCurrency(taxOwed), 'allocated, not yet paid', 'warn');
+  }
+
+  html += dashTile('Hours', totalHours.toFixed(1), timeEntries.length + ' entries', 'paid');
+
+  html += '</section>';
+  return html;
+}
+
+function dashTile(label, value, detail, type) {
+  var cls = type === 'total' ? 'flow-tile--total' :
+            type === 'paid' ? 'flow-tile--paid' :
+            type === 'outstanding' ? 'flow-tile--outstanding' :
+            type === 'warn' ? 'flow-tile--warn' : '';
+  return '<div class="flow-tile ' + cls + '">' +
+    '<span class="flow-tile__label">' + escapeHtml(label) + '</span>' +
+    '<span class="flow-tile__value">' + value + '</span>' +
+    '<span class="flow-tile__detail">' + escapeHtml(detail) + '</span>' +
+  '</div>';
+}
+
+function dashChart(invoices, year, activeMonths) {
+  var byCur = {};
+  invoices.forEach(function(inv) {
+    if (inv.status === 'void') return;
+    var cur = inv.currency || 'NZD';
+    var m = String(inv.created_date).match(/\d{4}-(\d{1,2})/);
+    if (!m) return;
+    var month = parseInt(m[1], 10);
+    if (!byCur[cur]) byCur[cur] = {};
+    byCur[cur][month] = (byCur[cur][month] || 0) + inv.total;
+  });
+
+  var currencies = Object.keys(byCur);
+  if (currencies.length === 0) {
+    return '<article><p class="muted">No revenue data to chart for ' + escapeHtml(year) + '.</p></article>';
+  }
+
+  var html = '';
+  currencies.forEach(function(cur) {
+    var monthData = byCur[cur];
+    var max = 0;
+    for (var i = 1; i <= 12; i++) {
+      if ((monthData[i] || 0) > max) max = monthData[i];
+    }
+    if (max === 0) return;
+
+    var padTop = 26;
+    var chartH = 130;
+    var labelH = 18;
+    var totalH = padTop + chartH + labelH;
+    var barW = 48;
+    var gap = 12;
+    var totalW = 12 * (barW + gap) - gap;
+
+    html += '<article class="dash-chart">' +
+      '<header><h3 style="margin:0;">Revenue by Month' +
+      (currencies.length > 1 ? ' <small class="muted">(' + escapeHtml(cur) + ')</small>' : '') +
+      '</h3></header>' +
+      '<div class="scroll-x">' +
+      '<svg viewBox="0 0 ' + totalW + ' ' + totalH + '" class="revenue-chart" preserveAspectRatio="xMidYMid meet">';
+
+    for (var m = 1; m <= 12; m++) {
+      var v = monthData[m] || 0;
+      var barH = max > 0 ? Math.max((v / max) * chartH, v > 0 ? 3 : 0) : 0;
+      var x = (m - 1) * (barW + gap);
+      var y = padTop + chartH - barH;
+      var active = activeMonths.indexOf(m) !== -1;
+
+      html += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + barH +
+              '" fill="' + (active && v > 0 ? 'var(--sage)' : 'var(--rule)') + '"' +
+              ' rx="2" opacity="' + (active ? '1' : '0.4') + '"/>';
+
+      if (v > 0 && active) {
+        html += '<text x="' + (x + barW/2) + '" y="' + (y - 6) + '" text-anchor="middle" ' +
+                'font-size="9" font-weight="500" fill="var(--ocean)">' +
+                dashCompact(v, cur) + '</text>';
+      }
+
+      html += '<text x="' + (x + barW/2) + '" y="' + (totalH - 2) + '" text-anchor="middle" ' +
+              'font-size="10" fill="' + (active ? 'var(--ocean)' : 'var(--muted)') + '">' +
+              MONTHS_SHORT[m-1] + '</text>';
+    }
+
+    html += '</svg></div></article>';
+  });
+
+  return html;
+}
+
+function dashCompact(amount, cur) {
+  var sym = {'NZD':'$','USD':'US$','AUD':'A$','GBP':'£','EUR':'€'};
+  var s = sym[cur] || (cur + ' ');
+  if (Math.abs(amount) >= 1000) return s + (amount/1000).toFixed(1) + 'k';
+  return s + amount.toFixed(0);
+}
+
+function dashOverdue(invoices) {
+  var now = new Date();
+  var overdue = invoices.filter(function(inv) {
+    if (inv.status !== 'sent') return false;
+    var d = new Date(inv.created_date);
+    inv._days = Math.floor((now - d) / 86400000);
+    return inv._days > 14;
+  }).sort(function(a, b) { return b._days - a._days; });
+
+  var html = '<article><header><h3 style="margin:0;">Overdue Invoices</h3></header>';
+
+  if (overdue.length === 0) {
+    html += '<p class="muted">No overdue invoices. All sent invoices are within 14 days.</p>';
+  } else {
+    html += '<table class="data-table data-table--compact"><thead><tr>' +
+      '<th>Invoice</th><th>Business</th><th class="number">Amount</th><th>Age</th>' +
+      '</tr></thead><tbody>';
+    overdue.forEach(function(inv) {
+      html += '<tr>' +
+        '<td><a href="#invoices"><strong>' + escapeHtml(inv.invoice_id) + '</strong></a></td>' +
+        '<td>' + escapeHtml(inv.business_name) + '</td>' +
+        '<td class="number">' + formatCurrency(inv.total, inv.currency) + '</td>' +
+        '<td><span class="badge" style="background:var(--danger-bg);color:var(--danger);">' + inv._days + 'd</span></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  html += '</article>';
+  return html;
+}
+
+function dashHours(timeEntries) {
+  var byBiz = {};
+  var totalHrs = 0;
+  var totalByCur = {};
+
+  timeEntries.forEach(function(te) {
+    var bizId = te.business_id;
+    var name = 'Unknown';
+    var cur = 'NZD';
+    if (AppCache.businesses) {
+      var biz = AppCache.businesses.find(function(b) { return b.business_id === bizId; });
+      if (biz) { name = biz.name; cur = biz.currency || 'NZD'; }
+    }
+    if (!byBiz[bizId]) byBiz[bizId] = { name: name, currency: cur, hours: 0, earned: 0 };
+    byBiz[bizId].hours += te.hours;
+    byBiz[bizId].earned += te.line_total;
+    totalHrs += te.hours;
+    totalByCur[cur] = (totalByCur[cur] || 0) + te.line_total;
+  });
+
+  var html = '<article><header><h3 style="margin:0;">Hours &amp; Earnings</h3></header>';
+
+  var keys = Object.keys(byBiz);
+  if (keys.length === 0) {
+    html += '<p class="muted">No time entries this period.</p>';
+  } else {
+    html += '<table class="data-table data-table--compact"><thead><tr>' +
+      '<th>Business</th><th class="number">Hours</th><th class="number">Earned</th>' +
+      '</tr></thead><tbody>';
+    keys.forEach(function(k) {
+      var b = byBiz[k];
+      html += '<tr><td>' + escapeHtml(b.name) + '</td>' +
+        '<td class="number">' + b.hours.toFixed(1) + '</td>' +
+        '<td class="number">' + formatCurrency(b.earned, b.currency) + '</td></tr>';
+    });
+    html += '<tr class="total-row"><td><strong>Total</strong></td>' +
+      '<td class="number"><strong>' + totalHrs.toFixed(1) + '</strong></td>' +
+      '<td class="number"><strong>' +
+      Object.keys(totalByCur).map(function(c) { return formatCurrency(totalByCur[c], c); }).join(' / ') +
+      '</strong></td></tr>';
+    html += '</tbody></table>';
+
+    if (totalHrs > 0) {
+      var rateHtml = Object.keys(totalByCur).map(function(cur) {
+        return formatCurrency(totalByCur[cur] / totalHrs, cur) + '/hr';
+      }).join(', ');
+      html += '<p class="muted small" style="margin:0.5rem 0 0;">Avg rate: ' + rateHtml + '</p>';
+    }
+  }
+
+  html += '</article>';
+  return html;
+}
+
+function dashBudget(budget) {
+  var html = '<article><header><h3 style="margin:0;">Budget Status</h3></header>' +
+    '<div class="dash-budget-grid">';
+
+  budget.forEach(function(cat) {
+    var pct = cat.allocated > 0 ? Math.round(cat.paid / cat.allocated * 100) : 0;
+    html += '<div class="dash-budget-item">' +
+      '<div class="dash-budget-item__header">' +
+        '<span>' + escapeHtml(cat.category) + '</span>' +
+        '<span class="muted">' + formatCurrency(cat.allocated) + '</span>' +
+      '</div>' +
+      '<div class="progress-bar"><div class="progress-bar__fill" style="width:' + pct + '%;"></div></div>' +
+      '<div class="dash-budget-item__detail">' +
+        '<span>Paid ' + formatCurrency(cat.paid) + '</span>' +
+        (cat.outstanding > 0
+          ? '<span style="color:var(--warn);">Owe ' + formatCurrency(cat.outstanding) + '</span>'
+          : '<span style="color:var(--sage);">Complete</span>') +
+      '</div>' +
+    '</div>';
+  });
+
+  html += '</div></article>';
+  return html;
+}
+</script>

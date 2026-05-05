@@ -102,7 +102,7 @@ function changeInvoiceStatus(invoiceId, newStatus) {
   serverCall('updateInvoiceStatusFromClient', invoiceId + '|' + newStatus).then(function() {
     showToast('Invoice marked as ' + newStatus);
     renderInvoiceList();
-    App.invalidate(['budget']);
+    App.invalidate(['budget', 'dashboard']);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -111,7 +111,7 @@ function voidInvoice(invoiceId) {
   serverCall('updateInvoiceStatusFromClient', invoiceId + '|void').then(function() {
     showToast('Invoice voided');
     renderInvoiceList();
-    App.invalidate(['hours', 'budget']);
+    App.invalidate(['hours', 'budget', 'dashboard']);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
@@ -346,7 +346,7 @@ function submitInvoiceEdit(event, invoiceId) {
   serverCall('updateInvoice', data).then(function() {
     showToast('Invoice updated');
     // List row shows totals/description that may have changed; bust budget too in case allocations exist.
-    App.invalidate(['invoices', 'budget']);
+    App.invalidate(['invoices', 'budget', 'dashboard']);
     viewInvoice(invoiceId);
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
@@ -498,7 +498,7 @@ function confirmCreateInvoice() {
 
   serverCall('generateInvoice', params).then(function(invoice) {
     showToast('Invoice ' + invoice.invoice_id + ' created');
-    App.invalidate(['hours', 'budget']);
+    App.invalidate(['hours', 'budget', 'dashboard']);
     showInvoiceTab('list');
   }).catch(function(err) { showToast(err.message, 'error'); });
 }
