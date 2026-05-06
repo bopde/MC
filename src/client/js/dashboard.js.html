@@ -1,76 +1,27 @@
 <script>
 var _dashData = null;
-var _dashPeriod = 'ytd';
-var _dashYear = new Date().getFullYear().toString();
 
 function renderDashboardPage(container) {
   container.innerHTML =
     '<div class="dash-filters">' +
-      '<label>Year ' + buildYearSelect('dash-year', _dashYear) + '</label>' +
-      '<div class="period-pills" id="dash-pills">' + buildPills(_dashPeriod) + '</div>' +
+      buildDateFilters('dash-from', 'dash-to', AppState.dateFrom, AppState.dateTo) +
+      '<button type="button" class="btn-subtle" onclick="loadDashboard()">Apply</button>' +
     '</div>' +
     '<div id="dash-content"><div aria-busy="true">Loading dashboard...</div></div>';
-
-  document.getElementById('dash-year').addEventListener('change', function() {
-    _dashYear = this.value;
-    AppState.year = this.value;
-    loadDashboard();
-  });
 
   loadDashboard();
 }
 
-function buildPills(active) {
-  var pills = [
-    { id: 'ytd', label: 'YTD' },
-    { id: 'q1', label: 'Q1' },
-    { id: 'q2', label: 'Q2' },
-    { id: 'q3', label: 'Q3' },
-    { id: 'q4', label: 'Q4' },
-    { id: 'all', label: 'Full Year' }
-  ];
-  return pills.map(function(p) {
-    return '<button class="period-pill' + (p.id === active ? ' active' : '') +
-           '" onclick="setDashPeriod(\'' + p.id + '\')">' + p.label + '</button>';
-  }).join('');
-}
-
-function setDashPeriod(period) {
-  _dashPeriod = period;
-  document.getElementById('dash-pills').innerHTML = buildPills(period);
-  if (_dashData) renderDashContent();
-}
-
-function getPeriodMonths(period, year) {
-  var now = new Date();
-  var isCurrentYear = (year === String(now.getFullYear()));
-  switch (period) {
-    case 'q1': return [1,2,3];
-    case 'q2': return [4,5,6];
-    case 'q3': return [7,8,9];
-    case 'q4': return [10,11,12];
-    case 'ytd':
-      var limit = isCurrentYear ? (now.getMonth() + 1) : 12;
-      var m = [];
-      for (var i = 1; i <= limit; i++) m.push(i);
-      return m;
-    default: return [1,2,3,4,5,6,7,8,9,10,11,12];
-  }
-}
-
-function inPeriod(dateStr, year, months) {
-  if (!dateStr) return false;
-  var s = String(dateStr);
-  var m = s.match(/^(\d{4})-(\d{1,2})/);
-  if (!m || m[1] !== year) return false;
-  return months.indexOf(parseInt(m[2], 10)) !== -1;
-}
-
 function loadDashboard() {
+  var fromEl = document.getElementById('dash-from');
+  var toEl = document.getElementById('dash-to');
+  if (fromEl) AppState.dateFrom = fromEl.value;
+  if (toEl) AppState.dateTo = toEl.value;
+
   var el = document.getElementById('dash-content');
   if (el) el.innerHTML = '<div aria-busy="true">Loading dashboard...</div>';
 
-  var dashPromise = serverCall('getDashboardData', _dashYear);
+  var dashPromise = serverCall('getDashboardData', { dateFrom: AppState.dateFrom, dateTo: AppState.dateTo });
   var contractPromise = serverCall('getContractProgress');
 
   Promise.all([dashPromise, contractPromise]).then(function(results) {
@@ -87,38 +38,28 @@ function renderDashContent() {
   if (!el || !_dashData) return;
 
   var data = _dashData;
-  var year = _dashYear;
-  var months = getPeriodMonths(_dashPeriod, year);
+  var invoices = data.invoices || [];
+  var timeEntries = data.timeEntries || [];
 
-  var invoices = (data.invoices || []).filter(function(inv) {
-    return inPeriod(inv.created_date, year, months);
-  });
-  var timeEntries = (data.timeEntries || []).filter(function(te) {
-    return inPeriod(te.date, year, months);
-  });
-
-  var allInvoices = data.invoices || [];
-
-  // Build business lookup map once
   var bizMap = {};
   if (AppCache.businesses) {
     AppCache.businesses.forEach(function(b) { bizMap[b.business_id] = b; });
   }
 
-  if (allInvoices.length === 0 && (data.timeEntries || []).length === 0 && (data.accountBalances || []).length === 0) {
+  if (invoices.length === 0 && timeEntries.length === 0 && (data.accountBalances || []).length === 0) {
     el.innerHTML = '<article class="empty-state"><h3>Welcome to your dashboard</h3>' +
       '<p class="muted">Start tracking hours and creating invoices to see your financial overview here.</p></article>';
     return;
   }
 
   var html = '';
-  html += dashTiles(invoices, allInvoices, data.budget || [], data.accountBalances || [], timeEntries, bizMap);
+  html += dashTiles(invoices, data.budget || [], data.accountBalances || [], timeEntries, bizMap);
   if (data.contractProgress && data.contractProgress.length > 0) {
     html += dashContracts(data.contractProgress);
   }
-  html += dashChart(allInvoices, year, months);
+  html += dashChart(invoices);
   html += '<div class="dash-columns">';
-  html += dashOverdue(allInvoices);
+  html += dashOverdue(invoices);
   html += dashHours(timeEntries, bizMap);
   html += '</div>';
   if (data.budget && data.budget.length > 0) {
@@ -128,7 +69,7 @@ function renderDashContent() {
   el.innerHTML = html;
 }
 
-function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries, bizMap) {
+function dashTiles(invoices, budget, accountBalances, timeEntries, bizMap) {
   var revByCur = {};
   var invCountByCur = {};
   invoices.forEach(function(inv) {
@@ -140,7 +81,7 @@ function dashTiles(invoices, allInvoices, budget, accountBalances, timeEntries, 
 
   var unpaidByCur = {};
   var unpaidCount = 0;
-  allInvoices.forEach(function(inv) {
+  invoices.forEach(function(inv) {
     if (inv.status !== 'sent') return;
     var cur = inv.currency || 'NZD';
     unpaidByCur[cur] = (unpaidByCur[cur] || 0) + inv.total;
@@ -214,7 +155,7 @@ function dashTile(label, value, detail, type) {
   '</div>';
 }
 
-function dashChart(invoices, year, activeMonths) {
+function dashChart(invoices) {
   var byCur = {};
   invoices.forEach(function(inv) {
     if (inv.status === 'void') return;
@@ -222,23 +163,33 @@ function dashChart(invoices, year, activeMonths) {
     var dateStr = String(inv.created_date || '');
     var m = dateStr.match(/(\d{4})-(\d{1,2})/);
     if (!m) return;
-    var month = parseInt(m[2], 10);
+    var key = m[1] + '-' + String(parseInt(m[2], 10)).padStart(2, '0');
     if (!byCur[cur]) byCur[cur] = {};
-    byCur[cur][month] = (byCur[cur][month] || 0) + inv.total;
+    byCur[cur][key] = (byCur[cur][key] || 0) + inv.total;
   });
 
   var currencies = Object.keys(byCur);
   if (currencies.length === 0) {
-    return '<article><p class="muted">No revenue data to chart for ' + escapeHtml(year) + '.</p></article>';
+    return '<article><p class="muted">No revenue data to chart for this period.</p></article>';
+  }
+
+  // Determine month range from filter dates
+  var fromDate = new Date(AppState.dateFrom || new Date().getFullYear() + '-01-01');
+  var toDate = new Date(AppState.dateTo || new Date().getFullYear() + '-12-31');
+  var months = [];
+  var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+  while (d <= toDate) {
+    months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    d.setMonth(d.getMonth() + 1);
   }
 
   var html = '';
   currencies.forEach(function(cur) {
     var monthData = byCur[cur];
     var max = 0;
-    for (var i = 1; i <= 12; i++) {
-      if ((monthData[i] || 0) > max) max = monthData[i];
-    }
+    months.forEach(function(mo) {
+      if ((monthData[mo] || 0) > max) max = monthData[mo];
+    });
     if (max === 0) return;
 
     var padTop = 26;
@@ -247,7 +198,7 @@ function dashChart(invoices, year, activeMonths) {
     var totalH = padTop + chartH + labelH;
     var barW = 48;
     var gap = 12;
-    var totalW = 12 * (barW + gap) - gap;
+    var totalW = months.length * (barW + gap) - gap;
 
     html += '<article class="dash-chart">' +
       '<header><h3 style="margin:0;">Revenue by Month' +
@@ -256,27 +207,27 @@ function dashChart(invoices, year, activeMonths) {
       '<div class="scroll-x">' +
       '<svg viewBox="0 0 ' + totalW + ' ' + totalH + '" class="revenue-chart" preserveAspectRatio="xMidYMid meet">';
 
-    for (var m = 1; m <= 12; m++) {
-      var v = monthData[m] || 0;
+    months.forEach(function(mo, idx) {
+      var v = monthData[mo] || 0;
       var barH = max > 0 ? Math.max((v / max) * chartH, v > 0 ? 3 : 0) : 0;
-      var x = (m - 1) * (barW + gap);
+      var x = idx * (barW + gap);
       var y = padTop + chartH - barH;
-      var active = activeMonths.indexOf(m) !== -1;
 
       html += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + barH +
-              '" fill="' + (active && v > 0 ? 'var(--sage)' : 'var(--rule)') + '"' +
-              ' rx="2" opacity="' + (active ? '1' : '0.4') + '"/>';
+              '" fill="' + (v > 0 ? 'var(--sage)' : 'var(--rule)') + '"' +
+              ' rx="2"/>';
 
-      if (v > 0 && active) {
+      if (v > 0) {
         html += '<text x="' + (x + barW/2) + '" y="' + (y - 6) + '" text-anchor="middle" ' +
                 'font-size="9" font-weight="500" fill="var(--ocean)">' +
                 dashCompact(v, cur) + '</text>';
       }
 
+      var moNum = parseInt(mo.split('-')[1], 10);
       html += '<text x="' + (x + barW/2) + '" y="' + (totalH - 2) + '" text-anchor="middle" ' +
-              'font-size="10" fill="' + (active ? 'var(--ocean)' : 'var(--muted)') + '">' +
-              MONTHS_SHORT[m-1] + '</text>';
-    }
+              'font-size="10" fill="var(--ocean)">' +
+              MONTHS_SHORT[moNum - 1] + '</text>';
+    });
 
     html += '</svg></div></article>';
   });

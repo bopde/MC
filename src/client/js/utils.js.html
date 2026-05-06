@@ -8,8 +8,8 @@ var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct',
 // Persist filter state across page invalidations
 var AppState = {
   year: new Date().getFullYear().toString(),
-  hoursFrom: '',
-  hoursTo: '',
+  dateFrom: new Date().getFullYear() + '-01-01',
+  dateTo: new Date().getFullYear() + '-12-31',
   hoursBiz: ''
 };
 
@@ -36,7 +36,7 @@ var AppCache = {
  * Promise wrapper around google.script.run with a timeout.
  */
 function serverCall(functionName, args) {
-  var TIMEOUT_MS = 20000;
+  var TIMEOUT_MS = 45000;
 
   return new Promise(function(resolve, reject) {
     var settled = false;
@@ -281,6 +281,40 @@ function yearStart(year) {
  */
 function yearEnd(year) {
   return year + '-12-31';
+}
+
+function datePreset(type) {
+  var now = new Date();
+  var y = now.getFullYear();
+  var to = todayStr();
+  switch (type) {
+    case 'week':
+      var w = new Date(now); w.setDate(w.getDate() - 6);
+      return { from: fmtDate(w), to: to };
+    case 'month':
+      return { from: y + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01', to: to };
+    case 'ytd':
+      return { from: y + '-01-01', to: to };
+    default:
+      return { from: y + '-01-01', to: y + '-12-31' };
+  }
+}
+
+function fmtDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function buildDateFilters(fromId, toId, fromVal, toVal) {
+  return '<label>From <input type="date" id="' + fromId + '" value="' + (fromVal || AppState.dateFrom) + '"></label>' +
+    '<label>To <input type="date" id="' + toId + '" value="' + (toVal || AppState.dateTo) + '"></label>';
+}
+
+function buildPresetPills(containerId, presets, activeName) {
+  return '<div class="period-pills" id="' + containerId + '">' +
+    presets.map(function(p) {
+      return '<button type="button" class="period-pill' + (p.id === activeName ? ' active' : '') +
+        '" data-preset="' + p.id + '">' + p.label + '</button>';
+    }).join('') + '</div>';
 }
 
 /**

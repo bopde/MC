@@ -132,15 +132,20 @@ function normaliseAllocationStatus(status) {
  *               accWithheld, accToPay }
  *   }
  */
-function getBudgetSummary(year) {
-  var invoices = year
-    ? getByYear('Invoices', 'created_date', year)
-    : getAll('Invoices');
+function getBudgetSummary(params) {
+  var invoices;
+  if (typeof params === 'object' && params !== null && params.dateFrom) {
+    invoices = getByDateRange('Invoices', 'created_date', params.dateFrom, params.dateTo);
+  } else if (params) {
+    invoices = getByYear('Invoices', 'created_date', params);
+  } else {
+    invoices = getAll('Invoices');
+  }
   var invoiceIds = {};
   invoices.forEach(function(inv) { invoiceIds[inv.invoice_id] = true; });
 
   var allAllocations = getAll('BudgetAllocations');
-  var allocations = year
+  var allocations = params
     ? allAllocations.filter(function(a) { return invoiceIds[a.invoice_id]; })
     : allAllocations;
   var businesses = getAll('Businesses');

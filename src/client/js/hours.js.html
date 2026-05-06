@@ -6,6 +6,7 @@
 
 var _loadedTimeEntries = [];
 var _loadedExpenses = [];
+var _hoursPreset = 'ytd';
 
 function renderHoursPage(container) {
   container.innerHTML =
@@ -63,14 +64,23 @@ function renderTimeEntryTab() {
 
     '<section style="margin-top:1.25rem;">' +
       '<div class="filters">' +
-        '<label>Year ' + buildYearSelect('te-filter-year', AppState.year) + '</label>' +
+        buildDateFilters('te-filter-from', 'te-filter-to', AppState.dateFrom, AppState.dateTo) +
         '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All', selected: AppState.hoursBiz }) + '</label>' +
-        '<label>From <input type="date" id="te-filter-from" value="' + (AppState.hoursFrom || '') + '"></label>' +
-        '<label>To <input type="date" id="te-filter-to" value="' + (AppState.hoursTo || '') + '"></label>' +
-        '<button class="btn-subtle" onclick="filterTimeEntries()">Filter</button>' +
+        '<button type="button" class="btn-subtle" onclick="filterTimeEntries()">Filter</button>' +
       '</div>' +
+      buildPresetPills('te-presets', [
+        { id: 'week', label: 'Past Week' },
+        { id: 'month', label: 'This Month' },
+        { id: 'ytd', label: 'YTD' }
+      ], _hoursPreset) +
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
     '</section>';
+
+  document.getElementById('te-presets').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    setHoursPreset(btn.dataset.preset);
+  });
 
   // Auto-fill rate and filter contracts/codes when business changes
   document.getElementById('te-business').addEventListener('change', function() {
@@ -100,6 +110,19 @@ function renderTimeEntryTab() {
   filterTimeEntries();
 }
 
+function setHoursPreset(preset) {
+  _hoursPreset = preset;
+  var range = datePreset(preset);
+  var fromEl = document.getElementById('te-filter-from');
+  var toEl = document.getElementById('te-filter-to');
+  if (fromEl) fromEl.value = range.from;
+  if (toEl) toEl.value = range.to;
+  document.querySelectorAll('#te-presets .period-pill').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.preset === preset);
+  });
+  filterTimeEntries();
+}
+
 function filterContractsByBusiness(bizId) {
   var contractEl = document.getElementById('te-contract');
   if (!contractEl) return;
@@ -112,7 +135,6 @@ function filterContractsByBusiness(bizId) {
   });
   contractEl.innerHTML = html;
 
-  // Replace listener to avoid stacking (clone trick)
   var newEl = contractEl.cloneNode(true);
   contractEl.parentNode.replaceChild(newEl, contractEl);
 
@@ -142,21 +164,18 @@ function buildCodeSelectOptions(codes) {
 }
 
 function filterTimeEntries() {
-  var yearEl = document.getElementById('te-filter-year');
   var fromEl = document.getElementById('te-filter-from');
   var toEl = document.getElementById('te-filter-to');
   var bizEl = document.getElementById('te-filter-biz');
 
-  AppState.year = yearEl ? yearEl.value : AppState.year;
-  AppState.hoursFrom = fromEl ? fromEl.value : '';
-  AppState.hoursTo = toEl ? toEl.value : '';
+  AppState.dateFrom = fromEl ? fromEl.value : AppState.dateFrom;
+  AppState.dateTo = toEl ? toEl.value : AppState.dateTo;
   AppState.hoursBiz = bizEl ? bizEl.value : '';
 
   var filters = {
-    year: AppState.year,
-    business_id: AppState.hoursBiz || undefined,
-    dateFrom: AppState.hoursFrom || undefined,
-    dateTo: AppState.hoursTo || undefined
+    dateFrom: AppState.dateFrom || undefined,
+    dateTo: AppState.dateTo || undefined,
+    business_id: AppState.hoursBiz || undefined
   };
 
   serverCall('getTimeEntries', filters).then(function(entries) {
@@ -306,9 +325,9 @@ function renderExpenseTab() {
 
     '<section style="margin-top:1.25rem;">' +
       '<div class="filters">' +
-        '<label>Year ' + buildYearSelect('exp-filter-year', AppState.year) + '</label>' +
+        buildDateFilters('exp-filter-from', 'exp-filter-to', AppState.dateFrom, AppState.dateTo) +
         '<label>Business ' + buildSelect('exp-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All' }) + '</label>' +
-        '<button class="btn-subtle" onclick="loadExpenses()">Filter</button>' +
+        '<button type="button" class="btn-subtle" onclick="loadExpenses()">Filter</button>' +
       '</div>' +
       '<div id="expenses-list" aria-busy="true">Loading...</div>' +
     '</section>';
@@ -317,10 +336,12 @@ function renderExpenseTab() {
 }
 
 function loadExpenses() {
-  var yearEl = document.getElementById('exp-filter-year');
+  var fromEl = document.getElementById('exp-filter-from');
+  var toEl = document.getElementById('exp-filter-to');
   var bizEl = document.getElementById('exp-filter-biz');
   var filters = {
-    year: yearEl ? yearEl.value : AppState.year,
+    dateFrom: fromEl ? fromEl.value : AppState.dateFrom,
+    dateTo: toEl ? toEl.value : AppState.dateTo,
     business_id: bizEl ? bizEl.value || undefined : undefined
   };
 

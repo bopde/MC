@@ -306,13 +306,18 @@ function updateInvoice(params) {
 }
 
 /**
- * Get invoices with business name and currency. Accepts optional year filter
- * to reduce payload (critical at scale).
+ * Get invoices with business name and currency.
+ * Accepts params object with dateFrom/dateTo, or a year string for backwards compat.
  */
-function getInvoicesWithDetails(year) {
-  var invoices = year
-    ? getByYear('Invoices', 'created_date', year)
-    : getAll('Invoices');
+function getInvoicesWithDetails(params) {
+  var invoices;
+  if (typeof params === 'object' && params !== null && params.dateFrom) {
+    invoices = getByDateRange('Invoices', 'created_date', params.dateFrom, params.dateTo);
+  } else if (params) {
+    invoices = getByYear('Invoices', 'created_date', params);
+  } else {
+    invoices = getAll('Invoices');
+  }
   var businesses = getAll('Businesses');
   var bizMap = {};
   businesses.forEach(function(b) { bizMap[b.business_id] = b; });

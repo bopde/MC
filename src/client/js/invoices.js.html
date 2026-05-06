@@ -31,22 +31,23 @@ function showInvoiceTab(tab) {
 
 function renderInvoiceList() {
   var content = document.getElementById('invoice-tab-content');
-  var year = AppState.year;
 
   content.innerHTML =
     '<div class="filters">' +
-      '<label>Year ' + buildYearSelect('inv-filter-year', year) + '</label>' +
-      '<button class="btn-subtle" onclick="renderInvoiceList()">Filter</button>' +
+      buildDateFilters('inv-filter-from', 'inv-filter-to', AppState.dateFrom, AppState.dateTo) +
+      '<button type="button" class="btn-subtle" onclick="renderInvoiceList()">Filter</button>' +
     '</div>' +
     '<div id="invoice-list-body" aria-busy="true">Loading invoices...</div>';
 
-  var yearEl = document.getElementById('inv-filter-year');
-  if (yearEl) { year = yearEl.value; AppState.year = year; }
+  var fromEl = document.getElementById('inv-filter-from');
+  var toEl = document.getElementById('inv-filter-to');
+  if (fromEl) AppState.dateFrom = fromEl.value;
+  if (toEl) AppState.dateTo = toEl.value;
 
-  serverCall('getInvoicesWithDetails', year).then(function(invoices) {
+  serverCall('getInvoicesWithDetails', { dateFrom: AppState.dateFrom, dateTo: AppState.dateTo }).then(function(invoices) {
     var body = document.getElementById('invoice-list-body');
     if (!invoices || invoices.length === 0) {
-      body.innerHTML = '<p class="muted">No invoices for ' + year + '. Create one from the "Create Invoice" tab.</p>';
+      body.innerHTML = '<p class="muted">No invoices in this date range. Create one from the "Create Invoice" tab.</p>';
       return;
     }
 
