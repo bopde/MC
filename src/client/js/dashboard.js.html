@@ -403,7 +403,8 @@ function dashContracts(contracts) {
       '</div>' +
       '<div class="progress-bar" style="position:relative;">' +
         '<div class="progress-bar__fill" style="width:' + pct + '%;background:var(--' + status + ');"></div>' +
-        '<div style="position:absolute;left:' + expectedPct + '%;top:-1px;width:1px;height:5px;background:var(--ocean);"></div>' +
+        '<div style="position:absolute;left:' + expectedPct + '%;top:-4px;width:3px;height:calc(100% + 8px);background:var(--ocean);border-radius:2px;opacity:0.85;"></div>' +
+        '<div style="position:absolute;left:calc(' + expectedPct + '% - 3px);top:-10px;width:0;height:0;border-left:4.5px solid transparent;border-right:4.5px solid transparent;border-top:6px solid var(--ocean);"></div>' +
       '</div>' +
       '<div class="dash-budget-item__detail">' +
         '<span>' + pct + '% spent' + (c.po_number ? ' &middot; PO ' + escapeHtml(c.po_number) : '') + '</span>' +

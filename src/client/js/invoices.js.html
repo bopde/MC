@@ -483,8 +483,8 @@ function previewInvoice() {
 
     html += '<label>Notes <textarea id="inv-notes" rows="2" placeholder="Additional notes"></textarea></label>' +
       '<div class="form-actions">' +
-        '<button onclick="confirmCreateInvoice()">Create Invoice</button>' +
-        '<button class="btn-subtle" onclick="renderCreateInvoice()">Cancel</button>' +
+        '<button type="button" onclick="confirmCreateInvoice()">Create Invoice</button>' +
+        '<button type="button" class="btn-subtle" onclick="renderCreateInvoice()">Cancel</button>' +
       '</div></div>';
 
     preview.innerHTML = html;
