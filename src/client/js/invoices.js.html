@@ -359,6 +359,16 @@ function renderCreateInvoice() {
   var businesses = AppCache.businesses || [];
   var content = document.getElementById('invoice-tab-content');
 
+  var now = new Date();
+  var lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  var lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  var defaultFrom = lastMonthStart.getFullYear() + '-' +
+    String(lastMonthStart.getMonth() + 1).padStart(2, '0') + '-' +
+    String(lastMonthStart.getDate()).padStart(2, '0');
+  var defaultTo = lastMonthEnd.getFullYear() + '-' +
+    String(lastMonthEnd.getMonth() + 1).padStart(2, '0') + '-' +
+    String(lastMonthEnd.getDate()).padStart(2, '0');
+
   content.innerHTML =
     '<form id="create-invoice-form" onsubmit="return false">' +
       '<div class="form-row">' +
@@ -366,18 +376,23 @@ function renderCreateInvoice() {
         '<label>Contract <select id="inv-contract"><option value="">All (no filter)</option></select></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>From <input type="date" id="inv-from" required></label>' +
-        '<label>To <input type="date" id="inv-to" required value="' + todayStr() + '"></label>' +
+        '<label>From <input type="date" id="inv-from" required value="' + defaultFrom + '"></label>' +
+        '<label>To <input type="date" id="inv-to" required value="' + defaultTo + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
         '<label><input type="checkbox" id="inv-gst" checked> Include GST</label>' +
         '<label>GST Rate (%) <input type="number" id="inv-gst-rate" step="0.01" value="15" min="0" max="100"></label>' +
       '</div>' +
       '<div class="form-actions">' +
-        '<button type="button" onclick="previewInvoice()">Preview Items</button>' +
+        '<button type="button" id="btn-preview-invoice">Preview Items</button>' +
       '</div>' +
     '</form>' +
     '<div id="invoice-preview"></div>';
+
+  document.getElementById('btn-preview-invoice').addEventListener('click', function(e) {
+    e.preventDefault();
+    previewInvoice();
+  });
 
   document.getElementById('inv-business').addEventListener('change', function() {
     var bizId = this.value;
@@ -484,11 +499,19 @@ function previewInvoice() {
 
     html += '<label>Notes <textarea id="inv-notes" rows="2" placeholder="Additional notes"></textarea></label>' +
       '<div class="form-actions">' +
-        '<button type="button" onclick="confirmCreateInvoice()">Create Invoice</button>' +
-        '<button type="button" class="btn-subtle" onclick="renderCreateInvoice()">Cancel</button>' +
+        '<button type="button" id="btn-confirm-invoice">Create Invoice</button>' +
+        '<button type="button" class="btn-subtle" id="btn-cancel-invoice">Cancel</button>' +
       '</div></div>';
 
     preview.innerHTML = html;
+    document.getElementById('btn-confirm-invoice').addEventListener('click', function(e) {
+      e.preventDefault();
+      confirmCreateInvoice();
+    });
+    document.getElementById('btn-cancel-invoice').addEventListener('click', function(e) {
+      e.preventDefault();
+      renderCreateInvoice();
+    });
   }).catch(function(err) {
     preview.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });

@@ -18,7 +18,11 @@ function bootstrap() {
   try { result.businesses = getActive('Businesses'); } catch (e) {}
   try { result.workCodes = getActive('WorkCodes'); } catch (e) {}
   try { result.accounts = getActive('Accounts'); } catch (e) {}
-  try { result.budgetRules = getAll('BudgetRules'); } catch (e) {}
+  try {
+    result.budgetRules = getAll('BudgetRules').filter(function(r) {
+      return r.active === true || r.active === 'TRUE' || r.active === 'true' || r.active === '' || r.active === undefined;
+    });
+  } catch (e) {}
   try { result.contracts = getActiveContracts(); } catch (e) {}
   try { result.myDetails = getMyDetails(); } catch (e) { result.myDetails = {}; }
   return result;
@@ -65,6 +69,7 @@ function addAccount(data) {
 
 function addBudgetRule(data) {
   validateBudgetRule(data);
+  data.active = true;
 
   if (data.is_default) {
     var existing = getAll('BudgetRules');

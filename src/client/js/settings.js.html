@@ -417,15 +417,21 @@ function renderRuleSettings() {
         '<th class="number">Tax Pay</th><th class="number">ACC Pay</th>' +
         '<th class="number">Donate</th><th class="number">Save</th>' +
         '<th class="number">Invest</th><th class="number">Spend</th>' +
-        '<th>Default</th><th></th></tr></thead><tbody>';
+        '<th>Default</th><th>Active</th><th></th></tr></thead><tbody>';
 
       rules.forEach(function(r) {
         var isDef = r.is_default === true || r.is_default === 'TRUE' || r.is_default === 'true';
-        html += '<tr id="rule-row-' + escapeHtml(r.rule_id) + '"><td><strong>' + escapeHtml(r.name) + '</strong></td>';
+        var isActive = r.active === true || r.active === 'TRUE' || r.active === 'true' || r.active === '' || r.active === undefined;
+        html += '<tr id="rule-row-' + escapeHtml(r.rule_id) + '" style="' + (isActive ? '' : 'opacity:0.5;') + '"><td><strong>' + escapeHtml(r.name) + '</strong></td>';
         _rulePctFields.forEach(function(f) {
           html += '<td class="number">' + formatPercent(r[f.field]) + '</td>';
         });
         html += '<td>' + (isDef ? 'Yes' : '') + '</td>' +
+          '<td>' +
+            (isActive
+              ? '<button type="button" class="btn-small btn-subtle" onclick="toggleBudgetRule(' + r._rowIndex + ', false)">Deactivate</button>'
+              : '<button type="button" class="btn-small" onclick="toggleBudgetRule(' + r._rowIndex + ', true)">Activate</button>') +
+          '</td>' +
           '<td class="actions"><button type="button" class="btn-small btn-subtle" onclick="editBudgetRule(\'' + escapeHtml(r.rule_id) + '\')">Edit</button></td></tr>';
       });
       html += '</tbody></table></div>';
@@ -520,6 +526,14 @@ function submitBudgetRuleEdit(event) {
   }).catch(function(err) {
     showToast(err.message, 'error');
   });
+}
+
+function toggleBudgetRule(rowIndex, active) {
+  serverCall('toggleEntityFromClient', 'BudgetRules|' + rowIndex + '|' + active).then(function() {
+    showToast(active ? 'Budget rule activated!' : 'Budget rule deactivated!');
+    refreshReferenceData();
+    renderRuleSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
 // --- Contracts ---
