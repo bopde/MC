@@ -28,8 +28,8 @@ var BUDGET_PCT_FIELDS = [
 function renderBudgetPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="budget-tabs">' +
-      '<button class="active" onclick="showBudgetTab(\'summary\')">Money Flow</button>' +
-      '<button onclick="showBudgetTab(\'allocate\')">Allocate Invoice</button>' +
+      '<button type="button" class="active" onclick="showBudgetTab(\'summary\')">Money Flow</button>' +
+      '<button type="button" onclick="showBudgetTab(\'allocate\')">Allocate Invoice</button>' +
     '</div>' +
     '<div id="budget-tab-content"></div>';
 
@@ -219,9 +219,9 @@ function renderCategoryBlock(cat) {
 
     if (!isWithheld) {
       if (status === 'allocated') {
-        html += '<button class="btn-small btn-primary" onclick="markAllocationPaid(\'' + item.allocation_id + '\')">Mark Paid</button>';
+        html += '<button type="button" class="btn-small btn-primary" onclick="markAllocationPaid(\'' + item.allocation_id + '\')">Mark Paid</button>';
       } else if (status === 'paid') {
-        html += '<button class="btn-small btn-subtle" onclick="markAllocationUnpaid(\'' + item.allocation_id + '\')">Undo</button>';
+        html += '<button type="button" class="btn-small btn-subtle" onclick="markAllocationUnpaid(\'' + item.allocation_id + '\')">Undo</button>';
       }
     }
 

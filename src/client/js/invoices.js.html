@@ -10,8 +10,8 @@
 function renderInvoicesPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="invoice-tabs">' +
-      '<button class="active" onclick="showInvoiceTab(\'list\')">All Invoices</button>' +
-      '<button onclick="showInvoiceTab(\'create\')">Create Invoice</button>' +
+      '<button type="button" class="active" onclick="showInvoiceTab(\'list\')">All Invoices</button>' +
+      '<button type="button" onclick="showInvoiceTab(\'create\')">Create Invoice</button>' +
     '</div>' +
     '<div id="invoice-tab-content"></div>';
 
@@ -71,7 +71,7 @@ function renderInvoiceList() {
         '<td class="number"><strong>' + formatCurrency(inv.total, cur) + '</strong></td>' +
         '<td><span class="badge badge-' + escapeHtml(inv.status) + '">' + escapeHtml(inv.status) + '</span></td>' +
         '<td class="actions">' +
-          '<button class="btn-small" onclick="viewInvoice(\'' + inv.invoice_id + '\')">View</button> ' +
+          '<button type="button" class="btn-small" onclick="viewInvoice(\'' + inv.invoice_id + '\')">View</button> ' +
           buildStatusButton(inv) +
         '</td>' +
         '</tr>';
@@ -88,13 +88,13 @@ function renderInvoiceList() {
 function buildStatusButton(inv) {
   var html = '';
   if (inv.status === 'draft') {
-    html += '<button class="btn-small" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'sent\')">Mark Sent</button> ';
-    html += '<button class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
+    html += '<button type="button" class="btn-small" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'sent\')">Mark Sent</button> ';
+    html += '<button type="button" class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
   } else if (inv.status === 'sent') {
-    html += '<button class="btn-small btn-primary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'paid\')">Mark Paid</button> ';
-    html += '<button class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
+    html += '<button type="button" class="btn-small btn-primary" onclick="changeInvoiceStatus(\'' + inv.invoice_id + '\', \'paid\')">Mark Paid</button> ';
+    html += '<button type="button" class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
   } else if (inv.status === 'paid') {
-    html += '<button class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
+    html += '<button type="button" class="btn-small btn-subtle" onclick="voidInvoice(\'' + inv.invoice_id + '\')">Void</button>';
   }
   return html;
 }
@@ -138,9 +138,9 @@ function renderInvoiceDetail(data) {
 
   var html =
     '<div class="no-print invoice-toolbar">' +
-      '<button class="btn-subtle" onclick="showInvoiceTab(\'list\')">&larr; Back</button> ' +
-      (canEdit ? '<button class="btn-subtle" onclick="editInvoice(\'' + inv.invoice_id + '\')">Edit</button> ' : '') +
-      '<button onclick="window.print()">Print / Save PDF</button>' +
+      '<button type="button" class="btn-subtle" onclick="showInvoiceTab(\'list\')">&larr; Back</button> ' +
+      (canEdit ? '<button type="button" class="btn-subtle" onclick="editInvoice(\'' + inv.invoice_id + '\')">Edit</button> ' : '') +
+      '<button type="button" onclick="window.print()">Print / Save PDF</button>' +
     '</div>' +
 
     '<article class="invoice-print">' +
@@ -282,7 +282,7 @@ function editInvoice(invoiceId) {
 
     var html =
       '<div class="invoice-toolbar">' +
-        '<button class="btn-subtle" onclick="viewInvoice(\'' + invoiceId + '\')">&larr; Cancel</button>' +
+        '<button type="button" class="btn-subtle" onclick="viewInvoice(\'' + invoiceId + '\')">&larr; Cancel</button>' +
       '</div>' +
       '<article>' +
         '<h3>Edit Invoice ' + escapeHtml(invoiceId) + '</h3>' +
@@ -360,7 +360,7 @@ function renderCreateInvoice() {
   var content = document.getElementById('invoice-tab-content');
 
   content.innerHTML =
-    '<form id="create-invoice-form">' +
+    '<form id="create-invoice-form" onsubmit="return false">' +
       '<div class="form-row">' +
         '<label>Business ' + buildSelect('inv-business', businesses, 'business_id', 'name', { required: true }) + '</label>' +
         '<label>Contract <select id="inv-contract"><option value="">All (no filter)</option></select></label>' +

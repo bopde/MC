@@ -7,12 +7,12 @@
 function renderSettingsPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="settings-tabs">' +
-      '<button class="active" onclick="showSettingsTab(\'mydetails\')">My Details</button>' +
-      '<button onclick="showSettingsTab(\'businesses\')">Businesses</button>' +
-      '<button onclick="showSettingsTab(\'contracts\')">Contracts</button>' +
-      '<button onclick="showSettingsTab(\'codes\')">Work Codes</button>' +
-      '<button onclick="showSettingsTab(\'accounts\')">Accounts</button>' +
-      '<button onclick="showSettingsTab(\'rules\')">Budget Rules</button>' +
+      '<button type="button" class="active" onclick="showSettingsTab(\'mydetails\')">My Details</button>' +
+      '<button type="button" onclick="showSettingsTab(\'businesses\')">Businesses</button>' +
+      '<button type="button" onclick="showSettingsTab(\'contracts\')">Contracts</button>' +
+      '<button type="button" onclick="showSettingsTab(\'codes\')">Work Codes</button>' +
+      '<button type="button" onclick="showSettingsTab(\'accounts\')">Accounts</button>' +
+      '<button type="button" onclick="showSettingsTab(\'rules\')">Budget Rules</button>' +
     '</div>' +
     '<div id="settings-tab-content"></div>';
 
@@ -135,8 +135,8 @@ function renderBusinessSettings() {
           '<td>' + escapeHtml(cur) + '</td>' +
           '<td>' +
             (isActive
-              ? '<button class="outline secondary" onclick="toggleBusiness(' + b._rowIndex + ', false)">Deactivate</button>'
-              : '<button class="outline" onclick="toggleBusiness(' + b._rowIndex + ', true)">Activate</button>') +
+              ? '<button type="button" class="outline secondary" onclick="toggleBusiness(' + b._rowIndex + ', false)">Deactivate</button>'
+              : '<button type="button" class="outline" onclick="toggleBusiness(' + b._rowIndex + ', true)">Activate</button>') +
           '</td>' +
           '</tr>';
       });
@@ -207,8 +207,8 @@ function renderCodeSettings() {
           '<td>' + escapeHtml(c.category) + '</td>' +
           '<td>' +
             (isActive
-              ? '<button class="outline secondary" onclick="toggleCode(' + c._rowIndex + ', false)">Deactivate</button>'
-              : '<button class="outline" onclick="toggleCode(' + c._rowIndex + ', true)">Activate</button>') +
+              ? '<button type="button" class="outline secondary" onclick="toggleCode(' + c._rowIndex + ', false)">Deactivate</button>'
+              : '<button type="button" class="outline" onclick="toggleCode(' + c._rowIndex + ', true)">Activate</button>') +
           '</td></tr>';
       });
       html += '</tbody></table>';
@@ -293,8 +293,8 @@ function renderAccountSettings() {
           '<td>' + escapeHtml(a.purpose) + '</td>' +
           '<td>' +
             (isActive
-              ? '<button class="outline secondary" onclick="toggleAccount(' + a._rowIndex + ', false)">Deactivate</button>'
-              : '<button class="outline" onclick="toggleAccount(' + a._rowIndex + ', true)">Activate</button>') +
+              ? '<button type="button" class="outline secondary" onclick="toggleAccount(' + a._rowIndex + ', false)">Deactivate</button>'
+              : '<button type="button" class="outline" onclick="toggleAccount(' + a._rowIndex + ', true)">Activate</button>') +
           '</td></tr>';
       });
       html += '</tbody></table>';
@@ -426,7 +426,7 @@ function renderRuleSettings() {
           html += '<td class="number">' + formatPercent(r[f.field]) + '</td>';
         });
         html += '<td>' + (isDef ? 'Yes' : '') + '</td>' +
-          '<td class="actions"><button class="btn-small btn-subtle" onclick="editBudgetRule(\'' + escapeHtml(r.rule_id) + '\')">Edit</button></td></tr>';
+          '<td class="actions"><button type="button" class="btn-small btn-subtle" onclick="editBudgetRule(\'' + escapeHtml(r.rule_id) + '\')">Edit</button></td></tr>';
       });
       html += '</tbody></table></div>';
     } else {
@@ -579,7 +579,7 @@ function renderContractSettings() {
           '<td><span class="badge badge-' + (isActive ? 'paid' : 'void') + '">' + escapeHtml(c.status) + '</span></td>' +
           '<td class="actions">' +
             (isActive
-              ? '<button class="btn-small btn-subtle" onclick="completeContract(\'' + c.contract_id + '\')">Complete</button>'
+              ? '<button type="button" class="btn-small btn-subtle" onclick="completeContract(\'' + c.contract_id + '\')">Complete</button>'
               : '') +
           '</td></tr>';
       });

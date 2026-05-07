@@ -11,8 +11,8 @@
 function renderAccountsPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="account-tabs">' +
-      '<button class="active" onclick="showAccountTab(\'monthly\')">Monthly Entry</button>' +
-      '<button onclick="showAccountTab(\'overview\')">Year Overview</button>' +
+      '<button type="button" class="active" onclick="showAccountTab(\'monthly\')">Monthly Entry</button>' +
+      '<button type="button" onclick="showAccountTab(\'overview\')">Year Overview</button>' +
     '</div>' +
     '<div id="account-tab-content"></div>';
 
@@ -40,7 +40,7 @@ function renderMonthlySummary() {
   content.innerHTML =
     '<div class="filters">' +
       '<label>Month <input type="month" id="as-month" value="' + currentMonth() + '" onchange="loadMonthlySummaries()"></label>' +
-      '<button class="btn-subtle" onclick="loadMonthlySummaries()">Reload</button>' +
+      '<button type="button" class="btn-subtle" onclick="loadMonthlySummaries()">Reload</button>' +
     '</div>' +
     '<div id="monthly-summaries"><div aria-busy="true">Loading...</div></div>';
 
@@ -176,7 +176,7 @@ function renderYearOverview() {
   content.innerHTML =
     '<div class="filters">' +
       '<label>Year <input type="number" id="ao-year" value="' + year + '" min="2020" max="2099" onchange="loadYearOverview()"></label>' +
-      '<button class="btn-subtle" onclick="loadYearOverview()">Reload</button>' +
+      '<button type="button" class="btn-subtle" onclick="loadYearOverview()">Reload</button>' +
     '</div>' +
     '<div id="year-overview"><div aria-busy="true">Loading...</div></div>';
 

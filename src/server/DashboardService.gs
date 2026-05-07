@@ -17,7 +17,7 @@ function getDashboardData(params) {
   var allocations = getAll('BudgetAllocations');
   var summaries = getAll('AccountSummaries');
   var accounts = getAll('Accounts').filter(function(a) {
-    return a.active === true || a.active === 'TRUE' || a.active === 'true';
+    return isTruthy(a.active);
   });
 
   var bizMap = {};

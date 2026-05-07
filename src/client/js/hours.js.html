@@ -11,8 +11,8 @@ var _hoursPreset = 'ytd';
 function renderHoursPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="hours-tabs">' +
-      '<button class="active" onclick="showHoursTab(\'time\')">Time</button>' +
-      '<button onclick="showHoursTab(\'expenses\')">Expenses</button>' +
+      '<button type="button" class="active" onclick="showHoursTab(\'time\')">Time</button>' +
+      '<button type="button" onclick="showHoursTab(\'expenses\')">Expenses</button>' +
     '</div>' +
     '<div id="hours-tab-content"></div>';
 
@@ -198,7 +198,7 @@ function updateTimeAutofill(entries) {
   var latestEnd = '';
 
   (entries || []).forEach(function(e) {
-    if (e.date && String(e.date).indexOf(selectedDate) === 0 && e.time_end) {
+    if (e.date && String(e.date).slice(0, 10) === selectedDate && e.time_end) {
       if (e.time_end > latestEnd) latestEnd = e.time_end;
     }
   });

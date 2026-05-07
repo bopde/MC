@@ -337,7 +337,6 @@ function dashContracts(contracts) {
   contracts.forEach(function(c) {
     var pct = c.value > 0 ? Math.min(Math.round(c.actual_pct * 100), 100) : 0;
     var expectedPct = Math.round(c.expected_pct * 100);
-    var remaining = c.value - c.spent;
 
     var status = 'sage';
     if (pct >= 90) status = 'danger';
