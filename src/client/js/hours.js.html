@@ -11,8 +11,8 @@ var _hoursPreset = 'ytd';
 function renderHoursPage(container) {
   container.innerHTML =
     '<div class="tab-bar" id="hours-tabs">' +
-      '<button class="active" onclick="showHoursTab(\'time\')">Time</button>' +
-      '<button onclick="showHoursTab(\'expenses\')">Expenses</button>' +
+      '<button type="button" class="active" onclick="showHoursTab(\'time\')">Time</button>' +
+      '<button type="button" onclick="showHoursTab(\'expenses\')">Expenses</button>' +
     '</div>' +
     '<div id="hours-tab-content"></div>';
 
