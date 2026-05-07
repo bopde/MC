@@ -336,124 +336,186 @@ function toggleAccount(rowIndex, active) {
 
 // --- Budget Rules ---
 
+var _rulePctFields = [
+  { id: 'br-tax-withheld', label: 'Tax Withheld %', field: 'tax_withheld_pct', tier: 'withheld', default: '0' },
+  { id: 'br-acc-withheld', label: 'ACC Withheld %', field: 'acc_withheld_pct', tier: 'withheld', default: '0' },
+  { id: 'br-tax-to-pay', label: 'Tax To Pay %', field: 'tax_to_pay_pct', tier: 'obligation', default: '0.28' },
+  { id: 'br-acc-to-pay', label: 'ACC To Pay %', field: 'acc_to_pay_pct', tier: 'obligation', default: '0.02' },
+  { id: 'br-donate', label: 'Donate %', field: 'donate_pct', tier: 'distribution', default: '0.05' },
+  { id: 'br-save', label: 'Save %', field: 'save_pct', tier: 'distribution', default: '0.10' },
+  { id: 'br-invest', label: 'Invest %', field: 'invest_pct', tier: 'distribution', default: '0.15' },
+  { id: 'br-spend', label: 'Spend %', field: 'spend_pct', tier: 'distribution', default: '0.70' }
+];
+
+var _editingRuleId = null;
+
+function buildRuleFormFields(prefix, values) {
+  var html = '<div class="form-row">' +
+    '<label>Rule Name <input type="text" id="' + prefix + '-name" required placeholder="e.g. Default Split" value="' + escapeHtml(values.name || '') + '"></label>' +
+  '</div>' +
+  '<p class="muted" style="margin:0.5rem 0;font-size:0.82rem;">' +
+    '<strong>Tier 1 — Withheld:</strong> deducted from gross → gives adjusted. ' +
+    '<strong>Tier 2 — Obligations:</strong> deducted from adjusted → gives net. ' +
+    '<strong>Tier 3 — Distribution:</strong> split of net, must sum to 100%. ' +
+    'Enter as decimals (e.g. 0.28 = 28%).' +
+  '</p>' +
+  '<p class="muted" style="margin:0 0 0.5rem;font-size:0.78rem;"><em>Tier 1 — Withheld (from gross)</em></p>' +
+  '<div class="form-row">';
+
+  _rulePctFields.forEach(function(f, i) {
+    var val = values[f.field] !== undefined ? values[f.field] : f.default;
+    html += '<label>' + f.label + ' <input type="number" id="' + prefix + '-' + f.field + '" step="0.01" value="' + val + '" required></label>';
+    if (i === 1) html += '</div><p class="muted" style="margin:0 0 0.5rem;font-size:0.78rem;"><em>Tier 2 — Obligations (from adjusted)</em></p><div class="form-row">';
+    if (i === 3) html += '</div><p class="muted" style="margin:0 0 0.5rem;font-size:0.78rem;"><em>Tier 3 — Distribution (from net, must = 100%)</em></p><div class="form-row">';
+  });
+
+  html += '</div>' +
+    '<div class="form-row">' +
+      '<label><input type="checkbox" id="' + prefix + '-default"' + (values.is_default ? ' checked' : '') + '> Set as default rule</label>' +
+      '<label>Notes <input type="text" id="' + prefix + '-notes" value="' + escapeHtml(values.notes || '') + '"></label>' +
+    '</div>' +
+    '<p id="' + prefix + '-sum-display" style="font-weight:600;"></p>';
+  return html;
+}
+
+function attachRuleSumListeners(prefix) {
+  _rulePctFields.forEach(function(f) {
+    var el = document.getElementById(prefix + '-' + f.field);
+    if (el) el.addEventListener('input', function() { updateRuleSum(prefix); });
+  });
+  updateRuleSum(prefix);
+}
+
+function readRuleFormData(prefix) {
+  var data = { name: document.getElementById(prefix + '-name').value };
+  _rulePctFields.forEach(function(f) {
+    data[f.field] = Number(document.getElementById(prefix + '-' + f.field).value);
+  });
+  data.is_default = document.getElementById(prefix + '-default').checked;
+  data.notes = document.getElementById(prefix + '-notes').value;
+  return data;
+}
+
 function renderRuleSettings() {
   var content = document.getElementById('settings-tab-content');
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
   serverCall('getBudgetRules').then(function(rules) {
-    var pctFields = [
-      { id: 'br-tax-withheld', label: 'Tax Withheld %', field: 'tax_withheld_pct', default: '0' },
-      { id: 'br-tax-to-pay', label: 'Tax To Pay %', field: 'tax_to_pay_pct', default: '0.28' },
-      { id: 'br-acc-withheld', label: 'ACC Withheld %', field: 'acc_withheld_pct', default: '0' },
-      { id: 'br-acc-to-pay', label: 'ACC To Pay %', field: 'acc_to_pay_pct', default: '0.02' },
-      { id: 'br-donate', label: 'Donate %', field: 'donate_pct', default: '0.05' },
-      { id: 'br-save', label: 'Save %', field: 'save_pct', default: '0.10' },
-      { id: 'br-invest', label: 'Invest %', field: 'invest_pct', default: '0.15' },
-      { id: 'br-spend', label: 'Spend %', field: 'spend_pct', default: '0.40' }
-    ];
-
     var html =
       '<details class="add-form-panel"><summary>+ Add New Budget Rule</summary><div>' +
       '<form id="add-rule-form" onsubmit="submitBudgetRule(event)">' +
-        '<div class="form-row">' +
-          '<label>Rule Name <input type="text" id="br-name" required placeholder="e.g. Default Split"></label>' +
-        '</div>' +
-        '<p class="muted" style="margin:0.5rem 0;font-size:0.82rem;">' +
-          '<strong>Withheld</strong> categories (Tax/ACC Withheld) apply to gross invoice total. ' +
-          'All other categories apply to net after withheld. Enter as decimals (e.g. 0.28 = 28%).' +
-        '</p>' +
-        '<div class="form-row">';
-
-    pctFields.forEach(function(f, i) {
-      html += '<label>' + f.label + ' <input type="number" id="' + f.id + '" step="0.01" value="' + f.default + '" required></label>';
-      if (i === 3) html += '</div><div class="form-row">'; // break into two rows
-    });
-
-    html += '</div>' +
-        '<div class="form-row">' +
-          '<label><input type="checkbox" id="br-default"> Set as default rule</label>' +
-          '<label>Notes <input type="text" id="br-notes"></label>' +
-        '</div>' +
-        '<p id="br-sum-display" style="font-weight:600;"></p>' +
+        buildRuleFormFields('br', {}) +
         '<div class="form-actions"><button type="submit">Add Rule</button></div>' +
       '</form></div></details>';
 
+    html += '<div id="rule-edit-area"></div>';
+
     if (rules.length > 0) {
-      html += '<table><thead><tr>' +
-        '<th>Name</th>';
-      pctFields.forEach(function(f) {
-        html += '<th class="number">' + f.label.replace(' %', '') + '</th>';
-      });
-      html += '<th>Default</th><th>Notes</th></tr></thead><tbody>';
+      html += '<div class="scroll-x"><table class="data-table"><thead><tr>' +
+        '<th>Name</th>' +
+        '<th class="number">Tax Wtd</th><th class="number">ACC Wtd</th>' +
+        '<th class="number">Tax Pay</th><th class="number">ACC Pay</th>' +
+        '<th class="number">Donate</th><th class="number">Save</th>' +
+        '<th class="number">Invest</th><th class="number">Spend</th>' +
+        '<th>Default</th><th></th></tr></thead><tbody>';
 
       rules.forEach(function(r) {
         var isDef = r.is_default === true || r.is_default === 'TRUE' || r.is_default === 'true';
-        html += '<tr><td><strong>' + escapeHtml(r.name) + '</strong></td>';
-        pctFields.forEach(function(f) {
+        html += '<tr id="rule-row-' + escapeHtml(r.rule_id) + '"><td><strong>' + escapeHtml(r.name) + '</strong></td>';
+        _rulePctFields.forEach(function(f) {
           html += '<td class="number">' + formatPercent(r[f.field]) + '</td>';
         });
         html += '<td>' + (isDef ? 'Yes' : '') + '</td>' +
-          '<td>' + escapeHtml(r.notes) + '</td></tr>';
+          '<td class="actions"><button class="btn-small btn-subtle" onclick="editBudgetRule(\'' + escapeHtml(r.rule_id) + '\')">Edit</button></td></tr>';
       });
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
     } else {
       html += '<p>No budget rules configured. Add one to start allocating invoice payments.</p>';
     }
 
     content.innerHTML = html;
-
-    // Live sum display
-    pctFields.forEach(function(f) {
-      var el = document.getElementById(f.id);
-      if (el) el.addEventListener('input', updateRuleSum);
-    });
-    updateRuleSum();
+    attachRuleSumListeners('br');
   }).catch(function(err) {
     content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
-function updateRuleSum() {
-  var withheldIds = ['br-tax-withheld', 'br-acc-withheld'];
-  var netIds = ['br-tax-to-pay', 'br-acc-to-pay', 'br-donate', 'br-save', 'br-invest', 'br-spend'];
+function editBudgetRule(ruleId) {
+  var rule = (AppCache.budgetRules || []).find(function(r) { return r.rule_id === ruleId; });
+  if (!rule) { showToast('Rule not found in cache', 'error'); return; }
 
-  var withheldSum = withheldIds.reduce(function(s, id) {
-    return s + (Number(document.getElementById(id).value) || 0);
-  }, 0);
-  var netSum = netIds.reduce(function(s, id) {
-    return s + (Number(document.getElementById(id).value) || 0);
-  }, 0);
+  _editingRuleId = ruleId;
+  var area = document.getElementById('rule-edit-area');
 
-  var display = document.getElementById('br-sum-display');
+  var isDef = rule.is_default === true || rule.is_default === 'TRUE' || rule.is_default === 'true';
+  var values = { name: rule.name, notes: rule.notes, is_default: isDef };
+  _rulePctFields.forEach(function(f) { values[f.field] = rule[f.field]; });
+
+  area.innerHTML =
+    '<article style="margin:1rem 0;">' +
+      '<header><h4>Edit Rule: ' + escapeHtml(rule.name) + '</h4></header>' +
+      '<form id="edit-rule-form" onsubmit="submitBudgetRuleEdit(event)">' +
+        buildRuleFormFields('bre', values) +
+        '<div class="form-actions">' +
+          '<button type="submit">Save Changes</button>' +
+          '<button type="button" class="btn-subtle" onclick="cancelRuleEdit()">Cancel</button>' +
+        '</div>' +
+      '</form>' +
+    '</article>';
+
+  attachRuleSumListeners('bre');
+  area.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelRuleEdit() {
+  _editingRuleId = null;
+  var area = document.getElementById('rule-edit-area');
+  if (area) area.innerHTML = '';
+}
+
+function updateRuleSum(prefix) {
+  var withheldSum = 0, obligationSum = 0, distSum = 0;
+  _rulePctFields.forEach(function(f) {
+    var val = Number(document.getElementById(prefix + '-' + f.field).value) || 0;
+    if (f.tier === 'withheld') withheldSum += val;
+    else if (f.tier === 'obligation') obligationSum += val;
+    else distSum += val;
+  });
+
+  var display = document.getElementById(prefix + '-sum-display');
   if (display) {
-    var netOk = Math.abs(netSum - 1.0) < 0.001;
+    var distOk = Math.abs(distSum - 1.0) < 0.001;
     display.innerHTML =
       'Withheld (from gross): ' + (withheldSum * 100).toFixed(1) + '% &nbsp; ' +
-      'Remaining (from net): <strong style="color:' + (netOk ? 'var(--sage)' : 'var(--danger)') + '">' +
-      (netSum * 100).toFixed(1) + '%</strong>' +
-      (netOk ? '' : ' <span style="color:var(--danger)">&mdash; must equal 100%</span>');
+      'Obligations (from adjusted): ' + (obligationSum * 100).toFixed(1) + '% &nbsp; ' +
+      'Distribution (from net): <strong style="color:' + (distOk ? 'var(--sage)' : 'var(--danger)') + '">' +
+      (distSum * 100).toFixed(1) + '%</strong>' +
+      (distOk ? '' : ' <span style="color:var(--danger)">&mdash; must equal 100%</span>');
   }
 }
 
 function submitBudgetRule(event) {
   event.preventDefault();
-  var data = {
-    name: document.getElementById('br-name').value,
-    tax_withheld_pct: Number(document.getElementById('br-tax-withheld').value),
-    tax_to_pay_pct: Number(document.getElementById('br-tax-to-pay').value),
-    acc_withheld_pct: Number(document.getElementById('br-acc-withheld').value),
-    acc_to_pay_pct: Number(document.getElementById('br-acc-to-pay').value),
-    donate_pct: Number(document.getElementById('br-donate').value),
-    save_pct: Number(document.getElementById('br-save').value),
-    invest_pct: Number(document.getElementById('br-invest').value),
-    spend_pct: Number(document.getElementById('br-spend').value),
-    is_default: document.getElementById('br-default').checked,
-    notes: document.getElementById('br-notes').value
-  };
+  var data = readRuleFormData('br');
 
   serverCall('addBudgetRule', data).then(function() {
     showToast('Budget rule added!');
-    loadReferenceData();
+    refreshReferenceData();
+    renderRuleSettings();
+  }).catch(function(err) {
+    showToast(err.message, 'error');
+  });
+}
+
+function submitBudgetRuleEdit(event) {
+  event.preventDefault();
+  var data = readRuleFormData('bre');
+  data.rule_id = _editingRuleId;
+
+  serverCall('updateBudgetRule', data).then(function() {
+    showToast('Budget rule updated!');
+    _editingRuleId = null;
+    refreshReferenceData();
     renderRuleSettings();
   }).catch(function(err) {
     showToast(err.message, 'error');
