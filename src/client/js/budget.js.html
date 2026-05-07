@@ -333,14 +333,24 @@ function previewAllocation() {
     var total = Number(data.invoice.total) || 0;
     var currency = (data.business && data.business.currency) || 'NZD';
 
-    // Apply withheld to gross, everything else to net after withheld
+    var WITHHELD = ['Tax Withheld', 'ACC Withheld'];
+    var OBLIGATIONS = ['Tax To Pay', 'ACC To Pay'];
+
     var withheldAmount = 0;
     BUDGET_CATEGORIES_UI.forEach(function(cat, i) {
-      if (cat === 'Tax Withheld' || cat === 'ACC Withheld') {
+      if (WITHHELD.indexOf(cat) !== -1) {
         withheldAmount += Math.round(total * (Number(rule[BUDGET_PCT_FIELDS[i]]) || 0) * 100) / 100;
       }
     });
-    var netToAllocate = total - withheldAmount;
+    var adjusted = total - withheldAmount;
+
+    var obligationAmount = 0;
+    BUDGET_CATEGORIES_UI.forEach(function(cat, i) {
+      if (OBLIGATIONS.indexOf(cat) !== -1) {
+        obligationAmount += Math.round(adjusted * (Number(rule[BUDGET_PCT_FIELDS[i]]) || 0) * 100) / 100;
+      }
+    });
+    var net = adjusted - obligationAmount;
 
     var html =
       '<article class="preview-card">' +
@@ -351,26 +361,42 @@ function previewAllocation() {
         '</header>' +
         '<div class="preview-numbers">' +
           '<div><span class="muted">Gross</span><strong>' + formatCurrency(total, currency) + '</strong></div>' +
-          (withheldAmount > 0 ? '<div><span class="muted">Withheld at source</span><strong>' + formatCurrency(withheldAmount, currency) + '</strong></div>' : '') +
-          '<div><span class="muted">Net to allocate</span><strong>' + formatCurrency(netToAllocate, currency) + '</strong></div>' +
+          (withheldAmount > 0 ? '<div><span class="muted">Withheld (at source)</span><strong>&minus;' + formatCurrency(withheldAmount, currency) + '</strong></div>' : '') +
+          '<div><span class="muted">Adjusted</span><strong>' + formatCurrency(adjusted, currency) + '</strong></div>' +
+          (obligationAmount > 0 ? '<div><span class="muted">Obligations (Tax/ACC to pay)</span><strong>&minus;' + formatCurrency(obligationAmount, currency) + '</strong></div>' : '') +
+          '<div><span class="muted">Net to distribute</span><strong>' + formatCurrency(net, currency) + '</strong></div>' +
         '</div>' +
-        '<p class="muted" style="font-size:0.78rem;margin:0 0 0.5rem;">Withheld categories are applied to the gross total. All other categories are applied to the net amount after withheld is subtracted.</p>' +
+        '<p class="muted" style="font-size:0.78rem;margin:0 0 0.5rem;">' +
+          'Withheld categories are deducted from gross to give adjusted. ' +
+          'Tax/ACC to pay are deducted from adjusted to give net. ' +
+          'Distribution categories (Donate/Save/Invest/Spend) split the net.' +
+        '</p>' +
         '<table class="data-table">' +
           '<thead><tr><th>Category</th><th class="number">%</th><th class="number">Amount</th><th>Note</th></tr></thead><tbody>';
 
     var allocTotal = 0;
     BUDGET_CATEGORIES_UI.forEach(function(cat, i) {
       var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
-      var isWithheld = cat === 'Tax Withheld' || cat === 'ACC Withheld';
-      var amount = isWithheld
-        ? Math.round(total * pct * 100) / 100
-        : Math.round(netToAllocate * pct * 100) / 100;
+      var isWithheld = WITHHELD.indexOf(cat) !== -1;
+      var isObligation = OBLIGATIONS.indexOf(cat) !== -1;
+      var amount;
+      var note;
+      if (isWithheld) {
+        amount = Math.round(total * pct * 100) / 100;
+        note = 'From gross';
+      } else if (isObligation) {
+        amount = Math.round(adjusted * pct * 100) / 100;
+        note = 'From adjusted';
+      } else {
+        amount = Math.round(net * pct * 100) / 100;
+        note = 'From net';
+      }
       allocTotal += amount;
       html += '<tr>' +
         '<td>' + escapeHtml(cat) + (isWithheld ? ' <span class="tag tag--auto">auto-paid</span>' : '') + '</td>' +
         '<td class="number">' + formatPercent(pct) + '</td>' +
         '<td class="number">' + formatCurrency(amount, currency) + '</td>' +
-        '<td class="muted">' + (isWithheld ? 'Applied to gross' : 'Applied to net') + '</td>' +
+        '<td class="muted">' + note + '</td>' +
       '</tr>';
     });
 

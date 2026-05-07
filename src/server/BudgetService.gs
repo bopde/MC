@@ -2,12 +2,12 @@
  * Budget allocation service.
  * Applies budget rules to invoices and tracks money flow.
  *
- * Categories: Tax Withheld, Tax To Pay, ACC Withheld, ACC To Pay,
- *             Donate, Save, Invest, Spend
+ * Three-tier allocation model:
+ *   Tier 1 — Withheld (Tax/ACC Withheld): % of Gross → deducted to give Adjusted
+ *   Tier 2 — Obligations (Tax/ACC To Pay): % of Adjusted → deducted to give Net
+ *   Tier 3 — Distribution (Donate/Save/Invest/Spend): % of Net → must sum to 100%
  *
- * Status model (simplified): 'allocated' -> 'paid'
- *   - 'allocated': money is earmarked but not yet moved
- *   - 'paid': money has been moved (or auto-paid for Withheld categories)
+ * Status model: 'allocated' -> 'paid'
  */
 
 var BUDGET_CATEGORIES = [
@@ -22,13 +22,43 @@ var BUDGET_PCT_FIELDS = [
 ];
 
 var WITHHELD_CATEGORIES = ['Tax Withheld', 'ACC Withheld'];
+var OBLIGATION_CATEGORIES = ['Tax To Pay', 'ACC To Pay'];
+var DISTRIBUTION_CATEGORIES = ['Donate', 'Save', 'Invest', 'Spend'];
+
+function computeAllocationAmounts(rule, gross) {
+  var withheld = 0;
+  BUDGET_CATEGORIES.forEach(function(cat, i) {
+    if (WITHHELD_CATEGORIES.indexOf(cat) !== -1) {
+      withheld += Math.round(gross * (Number(rule[BUDGET_PCT_FIELDS[i]]) || 0) * 100) / 100;
+    }
+  });
+  var adjusted = gross - withheld;
+
+  var obligations = 0;
+  BUDGET_CATEGORIES.forEach(function(cat, i) {
+    if (OBLIGATION_CATEGORIES.indexOf(cat) !== -1) {
+      obligations += Math.round(adjusted * (Number(rule[BUDGET_PCT_FIELDS[i]]) || 0) * 100) / 100;
+    }
+  });
+  var net = adjusted - obligations;
+
+  var amounts = {};
+  BUDGET_CATEGORIES.forEach(function(cat, i) {
+    var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
+    if (WITHHELD_CATEGORIES.indexOf(cat) !== -1) {
+      amounts[cat] = Math.round(gross * pct * 100) / 100;
+    } else if (OBLIGATION_CATEGORIES.indexOf(cat) !== -1) {
+      amounts[cat] = Math.round(adjusted * pct * 100) / 100;
+    } else {
+      amounts[cat] = Math.round(net * pct * 100) / 100;
+    }
+  });
+
+  return { amounts: amounts, withheld: withheld, adjusted: adjusted, obligations: obligations, net: net };
+}
 
 /**
  * Allocate budget for an invoice using a specific rule.
- * Creates BudgetAllocation rows for each category.
- *
- * @param {string} invoiceId
- * @param {string} ruleId
  */
 function allocateBudget(invoiceId, ruleId) {
   var invoice = findById('Invoices', invoiceId);
@@ -46,29 +76,18 @@ function allocateBudget(invoiceId, ruleId) {
 
   var total = Number(invoice.total) || 0;
   var today = new Date().toISOString().split('T')[0];
-
-  // Derive withheld amount from rule percentages (applied to gross).
-  var withheldFromRule = 0;
-  BUDGET_CATEGORIES.forEach(function(cat, i) {
-    if (WITHHELD_CATEGORIES.indexOf(cat) !== -1) {
-      withheldFromRule += Math.round(total * (Number(rule[BUDGET_PCT_FIELDS[i]]) || 0) * 100) / 100;
-    }
-  });
-  var netToAllocate = total - withheldFromRule;
+  var calc = computeAllocationAmounts(rule, total);
 
   var allocations = [];
   BUDGET_CATEGORIES.forEach(function(cat, i) {
     var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
     var isWithheld = WITHHELD_CATEGORIES.indexOf(cat) !== -1;
-    var amount = isWithheld
-      ? Math.round(total * pct * 100) / 100
-      : Math.round(netToAllocate * pct * 100) / 100;
 
     var allocation = appendRow('BudgetAllocations', {
       invoice_id: invoiceId,
       category: cat,
       percentage: pct,
-      amount: amount,
+      amount: calc.amounts[cat],
       status: isWithheld ? 'paid' : 'allocated',
       transfer_date: isWithheld ? today : '',
       notes: isWithheld ? 'Auto-paid (withheld by payer)' : ''
@@ -84,7 +103,6 @@ function allocateBudget(invoiceId, ruleId) {
 
 /**
  * Toggle allocation status between 'allocated' and 'paid'.
- * Simplified model: only two states.
  */
 function updateAllocationStatus(allocationId, newStatus, transferDate) {
   var validStatuses = ['allocated', 'paid'];
@@ -106,10 +124,6 @@ function updateAllocationStatus(allocationId, newStatus, transferDate) {
   return alloc;
 }
 
-/**
- * Normalise legacy status values into the two-state model.
- * Old values: pending -> allocated; transferred/reconciled -> paid.
- */
 function normaliseAllocationStatus(status) {
   if (status === 'paid' || status === 'transferred' || status === 'reconciled') return 'paid';
   return 'allocated';
@@ -117,20 +131,6 @@ function normaliseAllocationStatus(status) {
 
 /**
  * Get budget summary across all invoices.
- *
- * Returns:
- *   {
- *     categories: [
- *       {
- *         category, allocated, paid, outstanding,
- *         isWithheld, items: [{allocation_id, invoice_id, business_name, amount, status, transfer_date}]
- *       },
- *       ...
- *     ],
- *     totals: { allocated, paid, outstanding,
- *               taxWithheld, taxToPay, taxPaidTotal, taxOutstanding,
- *               accWithheld, accToPay }
- *   }
  */
 function getBudgetSummary(params) {
   var invoices;
@@ -194,10 +194,8 @@ function getBudgetSummary(params) {
     });
   });
 
-  // Build ordered array
   var categories = BUDGET_CATEGORIES.map(function(c) { return byCat[c]; });
 
-  // Roll-up totals
   var totals = {
     allocated: 0, paid: 0, outstanding: 0,
     taxWithheld: byCat['Tax Withheld'].paid,
@@ -219,19 +217,19 @@ function getBudgetSummary(params) {
 }
 
 /**
- * Validate budget rule: non-withheld categories must sum to 100% of net.
- * Withheld categories are taken from gross separately.
+ * Validate budget rule: distribution categories (Donate/Save/Invest/Spend)
+ * must sum to 100% of net.
  */
 function validateBudgetRule(rule) {
-  var netSum = 0;
+  var distSum = 0;
   BUDGET_CATEGORIES.forEach(function(cat, i) {
-    if (WITHHELD_CATEGORIES.indexOf(cat) === -1) {
-      netSum += Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
+    if (DISTRIBUTION_CATEGORIES.indexOf(cat) !== -1) {
+      distSum += Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
     }
   });
 
-  if (Math.abs(netSum - 1.0) > 0.001) {
-    throw new Error('Non-withheld categories must sum to 100% of net. Current: ' + (netSum * 100).toFixed(1) + '%');
+  if (Math.abs(distSum - 1.0) > 0.001) {
+    throw new Error('Distribution categories (Donate, Save, Invest, Spend) must sum to 100%. Current: ' + (distSum * 100).toFixed(1) + '%');
   }
   return true;
 }

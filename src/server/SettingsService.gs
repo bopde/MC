@@ -79,6 +79,37 @@ function addBudgetRule(data) {
   return appendRow('BudgetRules', data);
 }
 
+function updateBudgetRule(data) {
+  var rule = findById('BudgetRules', data.rule_id);
+  if (!rule) throw new Error('Budget rule not found: ' + data.rule_id);
+
+  validateBudgetRule(data);
+
+  if (data.is_default) {
+    var existing = getAll('BudgetRules');
+    existing.forEach(function(r) {
+      if (r.is_default && r.rule_id !== data.rule_id) {
+        r.is_default = false;
+        updateRow('BudgetRules', r._rowIndex, r);
+      }
+    });
+  }
+
+  rule.name = data.name;
+  rule.tax_withheld_pct = data.tax_withheld_pct;
+  rule.tax_to_pay_pct = data.tax_to_pay_pct;
+  rule.acc_withheld_pct = data.acc_withheld_pct;
+  rule.acc_to_pay_pct = data.acc_to_pay_pct;
+  rule.donate_pct = data.donate_pct;
+  rule.save_pct = data.save_pct;
+  rule.invest_pct = data.invest_pct;
+  rule.spend_pct = data.spend_pct;
+  rule.is_default = data.is_default;
+  rule.notes = data.notes;
+  updateRow('BudgetRules', rule._rowIndex, rule);
+  return rule;
+}
+
 function getBudgetRules() {
   return getAll('BudgetRules');
 }
