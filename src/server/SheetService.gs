@@ -58,12 +58,16 @@ function getAllClient(sheetName) {
   return getAll(sheetName);
 }
 
+function isTruthy(val) {
+  return val === true || val === 'TRUE' || val === 'true';
+}
+
 /**
  * Get active (non-deleted) rows from a reference table.
  */
 function getActive(sheetName) {
   return getAll(sheetName).filter(function(row) {
-    return row.active === true || row.active === 'TRUE' || row.active === 'true';
+    return isTruthy(row.active);
   });
 }
 
@@ -115,22 +119,28 @@ function updateRow(sheetName, rowIndex, data) {
 }
 
 /**
+ * Compare two ID values allowing for Sheets stripping leading zeros.
+ */
+function idsMatch(a, b) {
+  var sa = String(a);
+  var sb = String(b);
+  if (sa === sb) return true;
+  return sa.replace(/^0+/, '') === sb.replace(/^0+/, '') && (sa !== '' && sb !== '');
+}
+
+/**
  * Find a row by ID (first column match).
  */
 function findById(sheetName, id) {
   var rows = getAll(sheetName);
   if (rows.length === 0) return null;
 
-  // Get the ID field name from the first key (excluding _rowIndex)
   var keys = Object.keys(rows[0]).filter(function(k) { return k !== '_rowIndex'; });
   var idField = keys[0];
 
   var idStr = String(id);
   for (var i = 0; i < rows.length; i++) {
-    var rowId = String(rows[i][idField]);
-    if (rowId === idStr) return rows[i];
-    // Handle leading-zero stripping (e.g. "0526" stored as 526)
-    if (idStr.charAt(0) === '0' && rowId === idStr.replace(/^0+/, '')) return rows[i];
+    if (idsMatch(rows[i][idField], idStr)) return rows[i];
   }
   return null;
 }
@@ -152,11 +162,12 @@ function valueExists(sheetName, column, value) {
  * payload across the google.script.run bridge (critical at 10k+ rows).
  */
 function getByYear(sheetName, dateColumn, year) {
-  var yearStr = String(year);
+  var yearNum = Number(year);
   return getAll(sheetName).filter(function(row) {
     var val = row[dateColumn];
     if (!val) return false;
-    return String(val).indexOf(yearStr) === 0;
+    var d = new Date(val);
+    return !isNaN(d.getTime()) && d.getFullYear() === yearNum;
   });
 }
 

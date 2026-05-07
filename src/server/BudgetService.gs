@@ -61,57 +61,60 @@ function computeAllocationAmounts(rule, gross) {
  * Allocate budget for an invoice using a specific rule.
  */
 function allocateBudget(invoiceId, ruleId) {
-  var invoice = findById('Invoices', invoiceId);
-  if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var invoice = findById('Invoices', invoiceId);
+    if (!invoice) throw new Error('Invoice not found: ' + invoiceId);
 
-  var existing = getAll('BudgetAllocations').filter(function(a) {
-    return a.invoice_id === invoiceId;
-  });
-  if (existing.length > 0) {
-    throw new Error('Budget already allocated for this invoice.');
-  }
-
-  var rule = findById('BudgetRules', ruleId);
-  if (!rule) throw new Error('Budget rule not found: ' + ruleId);
-
-  var total = Number(invoice.total) || 0;
-  var today = new Date().toISOString().split('T')[0];
-  var calc = computeAllocationAmounts(rule, total);
-
-  var allocations = [];
-  BUDGET_CATEGORIES.forEach(function(cat, i) {
-    var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
-    var isWithheld = WITHHELD_CATEGORIES.indexOf(cat) !== -1;
-
-    var allocation = appendRow('BudgetAllocations', {
-      invoice_id: invoiceId,
-      category: cat,
-      percentage: pct,
-      amount: calc.amounts[cat],
-      status: isWithheld ? 'paid' : 'allocated',
-      transfer_date: isWithheld ? today : '',
-      notes: isWithheld ? 'Auto-paid (withheld by payer)' : ''
+    var existing = getAll('BudgetAllocations').filter(function(a) {
+      return idsMatch(a.invoice_id, invoiceId);
     });
-    allocations.push(allocation);
-  });
+    if (existing.length > 0) {
+      throw new Error('Budget already allocated for this invoice.');
+    }
 
-  invoice.budget_rule_id = ruleId;
-  updateRow('Invoices', invoice._rowIndex, invoice);
+    var rule = findById('BudgetRules', ruleId);
+    if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
-  return allocations;
+    var total = Number(invoice.total) || 0;
+    var today = new Date().toISOString().split('T')[0];
+    var calc = computeAllocationAmounts(rule, total);
+
+    var allocations = [];
+    BUDGET_CATEGORIES.forEach(function(cat, i) {
+      var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
+      var isWithheld = WITHHELD_CATEGORIES.indexOf(cat) !== -1;
+
+      var allocation = appendRow('BudgetAllocations', {
+        invoice_id: invoiceId,
+        category: cat,
+        percentage: pct,
+        amount: calc.amounts[cat],
+        status: isWithheld ? 'paid' : 'allocated',
+        transfer_date: isWithheld ? today : '',
+        notes: isWithheld ? 'Auto-paid (withheld by payer)' : ''
+      });
+      allocations.push(allocation);
+    });
+
+    invoice.budget_rule_id = ruleId;
+    updateRow('Invoices', invoice._rowIndex, invoice);
+
+    return allocations;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
  * Toggle allocation status between 'allocated' and 'paid'.
  */
 function updateAllocationStatus(allocationId, newStatus, transferDate) {
-  var validStatuses = ['allocated', 'paid'];
-  if (validStatuses.indexOf(newStatus) === -1) {
-    throw new Error('Invalid allocation status: ' + newStatus);
-  }
+  newStatus = normaliseAllocationStatus(newStatus);
 
   var allocs = getAll('BudgetAllocations');
-  var alloc = allocs.find(function(a) { return a.allocation_id === allocationId; });
+  var alloc = allocs.find(function(a) { return idsMatch(a.allocation_id, allocationId); });
   if (!alloc) throw new Error('Allocation not found: ' + allocationId);
 
   alloc.status = newStatus;
@@ -141,12 +144,13 @@ function getBudgetSummary(params) {
   } else {
     invoices = getAll('Invoices');
   }
-  var invoiceIds = {};
-  invoices.forEach(function(inv) { invoiceIds[inv.invoice_id] = true; });
+  var invoiceIdList = invoices.map(function(inv) { return String(inv.invoice_id); });
 
   var allAllocations = getAll('BudgetAllocations');
   var allocations = params
-    ? allAllocations.filter(function(a) { return invoiceIds[a.invoice_id]; })
+    ? allAllocations.filter(function(a) {
+        return invoiceIdList.some(function(id) { return idsMatch(a.invoice_id, id); });
+      })
     : allAllocations;
   var businesses = getAll('Businesses');
 

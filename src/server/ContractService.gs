@@ -14,15 +14,15 @@ function addContract(params) {
 
   var contract = appendRow('Contracts', {
     business_id: params.business_id,
-    name: sanitiseCell(params.name),
-    po_number: sanitiseCell(params.po_number || ''),
+    name: params.name,
+    po_number: params.po_number || '',
     date_from: params.date_from,
     date_to: params.date_to,
     value: Number(params.value),
     currency: params.currency || business.currency || 'NZD',
     work_codes: params.work_codes || '',
     status: 'active',
-    notes: sanitiseCell(params.notes || '')
+    notes: params.notes || ''
   });
 
   return contract;
@@ -32,15 +32,15 @@ function updateContract(params) {
   var contract = findById('Contracts', params.contract_id);
   if (!contract) throw new Error('Contract not found.');
 
-  if (params.name !== undefined) contract.name = sanitiseCell(params.name);
-  if (params.po_number !== undefined) contract.po_number = sanitiseCell(params.po_number);
+  if (params.name !== undefined) contract.name = params.name;
+  if (params.po_number !== undefined) contract.po_number = params.po_number;
   if (params.date_from !== undefined) contract.date_from = params.date_from;
   if (params.date_to !== undefined) contract.date_to = params.date_to;
   if (params.value !== undefined) contract.value = Number(params.value);
   if (params.currency !== undefined) contract.currency = params.currency;
   if (params.work_codes !== undefined) contract.work_codes = params.work_codes;
   if (params.status !== undefined) contract.status = params.status;
-  if (params.notes !== undefined) contract.notes = sanitiseCell(params.notes);
+  if (params.notes !== undefined) contract.notes = params.notes;
 
   updateRow('Contracts', contract._rowIndex, contract);
   return contract;

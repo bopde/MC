@@ -154,7 +154,7 @@ function getInvoiceDetails(invoiceId) {
 
   // Get allocations if they exist
   var allocations = getAll('BudgetAllocations').filter(function(a) {
-    return a.invoice_id === invoiceId;
+    return idsMatch(a.invoice_id, invoiceId);
   });
 
   // Get "my details" for the invoice header
@@ -290,7 +290,7 @@ function updateInvoice(params) {
     // block the edit — the allocations would become inconsistent.
     if (Math.abs(newTotal - (Number(invoice.total) || 0)) > 0.005) {
       var hasAllocations = getAll('BudgetAllocations').some(function(a) {
-        return a.invoice_id === invoice.invoice_id;
+        return idsMatch(a.invoice_id, invoice.invoice_id);
       });
       if (hasAllocations) {
         throw new Error('This invoice is already allocated. Changing the total would desync the budget. Remove the allocation first, or edit before allocating.');
@@ -344,23 +344,35 @@ function generateInvoiceId() {
     var base = mm + yy;
 
     var invoices = getAll('Invoices');
-    var pattern = new RegExp('^' + base + '[a-z]*$');
-    var sameMonth = invoices.filter(function(inv) {
-      return pattern.test(String(inv.invoice_id));
+    var baseNum = base.replace(/^0+/, '');
+    var pattern = new RegExp('^0*' + baseNum + '([a-z]*)$');
+    var maxSuffix = '';
+    var count = 0;
+    invoices.forEach(function(inv) {
+      var m = pattern.exec(String(inv.invoice_id));
+      if (m) {
+        count++;
+        if (m[1] > maxSuffix) maxSuffix = m[1];
+      }
     });
 
-    if (sameMonth.length === 0) return base;
+    if (count === 0) return base;
 
-    // Generate suffix: a-z, then aa, ab, ... az, ba, ...
-    var n = sameMonth.length;
-    var suffix = '';
-    do {
-      suffix = String.fromCharCode(97 + ((n - 1) % 26)) + suffix;
-      n = Math.floor((n - 1) / 26);
-    } while (n > 0);
-
-    return base + suffix;
+    // Next suffix after the highest existing one
+    var nextChar = maxSuffix === '' ? 'a' : nextSuffix(maxSuffix);
+    return base + nextChar;
   } finally {
     lock.releaseLock();
   }
+}
+
+function nextSuffix(s) {
+  var chars = s.split('');
+  var i = chars.length - 1;
+  while (i >= 0) {
+    if (chars[i] < 'z') { chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1); return chars.join(''); }
+    chars[i] = 'a';
+    i--;
+  }
+  return 'a' + chars.join('');
 }

@@ -88,15 +88,6 @@ function getTimeEntries(filters) {
   if (filters.business_id) {
     entries = entries.filter(function(e) { return e.business_id === filters.business_id; });
   }
-  if (filters.dateFrom) {
-    var from = new Date(filters.dateFrom);
-    entries = entries.filter(function(e) { return new Date(e.date) >= from; });
-  }
-  if (filters.dateTo) {
-    var to = new Date(filters.dateTo);
-    to.setHours(23, 59, 59);
-    entries = entries.filter(function(e) { return new Date(e.date) <= to; });
-  }
   if (filters.uninvoicedOnly) {
     entries = entries.filter(function(e) { return !e.invoice_id || e.invoice_id === ''; });
   }

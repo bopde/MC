@@ -11,7 +11,6 @@ var ID_PREFIXES = {
   'Contracts': 'CON',
   'TimeEntries': 'TE',
   'Expenses': 'EXP',
-  'Invoices': 'INV',
   'BudgetAllocations': 'BA',
   'AccountSummaries': 'AS'
 };
