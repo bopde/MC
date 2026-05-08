@@ -48,7 +48,8 @@ function updateContract(params) {
 
 function getActiveContracts() {
   return getAll('Contracts').filter(function(c) {
-    return c.status === 'active';
+    var s = String(c.status || '').trim().toLowerCase();
+    return s !== 'complete' && s !== 'cancelled' && s !== 'void';
   });
 }
 
