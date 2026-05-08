@@ -41,7 +41,7 @@ function updateAllocationStatusFromClient(params) {
  * @param {string} params - "sheetName|rowIndex|active"
  */
 function toggleEntityFromClient(params) {
-  var ALLOWED = ['Businesses', 'WorkCodes', 'Accounts'];
+  var ALLOWED = ['Businesses', 'WorkCodes', 'Accounts', 'BudgetRules'];
   var parts = params.split('|');
   var sheetName = parts[0];
   var rowIndex = parseInt(parts[1], 10);

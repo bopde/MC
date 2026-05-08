@@ -141,7 +141,6 @@
     margin-bottom: 1.25rem;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--rule);
-    overflow: visible;
   }
   .tab-bar button {
     background: var(--white);
@@ -190,8 +189,12 @@
     border-radius: 2px;
     transition: background 0.2s, transform 0.15s;
     min-height: 44px; /* touch target */
+    touch-action: manipulation; /* prevent 300ms tap delay on mobile */
+    -webkit-tap-highlight-color: rgba(74,144,184,0.2);
   }
   button:active { transform: scale(0.97); }
+  .form-actions button, .invoice-toolbar button, .tab-bar button,
+  button.btn-small, button.btn-subtle, button.btn-primary { width: auto !important; }
   .btn-small, button.btn-small { padding: 0.35rem 0.75rem; font-size: 0.78rem; min-height: 36px; }
   .btn-subtle, button.btn-subtle {
     background: transparent;
@@ -422,6 +425,7 @@
   .category-block table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   .progress-bar { height: 3px; background: var(--rule-2); border-radius: 2px; overflow: hidden; margin-bottom: 0.6rem; }
+  .progress-bar--pacing { overflow: visible; margin-top: 12px; margin-bottom: 1rem; }
   .progress-bar__fill { height: 100%; background: var(--fern); transition: width 0.3s ease; }
 
   /* ---- Balance matrix cells ---- */
@@ -573,7 +577,7 @@
     margin-bottom: 1.25rem;
   }
   .dash-filters label { font-size: 0.75rem; margin-bottom: 0; }
-  .dash-filters input { margin-bottom: 0; min-height: 44px; }
+  .dash-filters input, .dash-filters select { margin-bottom: 0; min-height: 44px; }
 
   .period-pills { display: flex; gap: 0.25rem; flex-wrap: wrap; align-self: end; }
   .period-pill {
@@ -679,8 +683,9 @@
     table { font-size: 0.8rem; }
     table td, table th { padding: 0.4rem 0.45rem; }
     .toast { left: 0.75rem; right: 0.75rem; }
-    .tab-bar { gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 0.4rem; }
-    .tab-bar button { flex-shrink: 0; }
+    .tab-bar { gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 0.4rem; scrollbar-width: none; -ms-overflow-style: none; }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab-bar button { flex-shrink: 0; min-height: 40px; }
     .preview-numbers { gap: 0.75rem; }
     .category-block { padding: 0.75rem; }
     .category-block__header { gap: 0.3rem; }
