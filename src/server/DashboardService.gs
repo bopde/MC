@@ -22,14 +22,14 @@ function getDashboardData(params) {
   });
 
   var bizMap = {};
-  businesses.forEach(function(b) { bizMap[b.business_id] = b; });
+  businesses.forEach(function(b) { bizMap[String(b.business_id)] = b; });
 
   var invoices = invoicesRaw.filter(function(inv) {
     if (!inRange(inv.created_date, from, to)) return false;
-    if (businessId && String(inv.business_id) !== String(businessId)) return false;
+    if (businessId && !idsMatch(inv.business_id, businessId)) return false;
     return true;
   }).map(function(inv) {
-    var biz = bizMap[inv.business_id];
+    var biz = bizMap[String(inv.business_id)];
     return {
       invoice_id: inv.invoice_id,
       business_id: inv.business_id,
@@ -44,7 +44,7 @@ function getDashboardData(params) {
 
   var timeEntries = timeEntriesRaw.filter(function(te) {
     if (!inRange(te.date, from, to)) return false;
-    if (businessId && String(te.business_id) !== String(businessId)) return false;
+    if (businessId && !idsMatch(te.business_id, businessId)) return false;
     return true;
   }).map(function(te) {
     return {
@@ -57,7 +57,7 @@ function getDashboardData(params) {
 
   var expenses = expensesRaw.filter(function(exp) {
     if (!inRange(exp.date, from, to)) return false;
-    if (businessId && String(exp.business_id) !== String(businessId)) return false;
+    if (businessId && !idsMatch(exp.business_id, businessId)) return false;
     return true;
   }).map(function(exp) {
     return {
@@ -68,11 +68,11 @@ function getDashboardData(params) {
   });
 
   var filteredInvoiceIds = {};
-  invoices.forEach(function(inv) { filteredInvoiceIds[inv.invoice_id] = true; });
+  invoices.forEach(function(inv) { filteredInvoiceIds[String(inv.invoice_id)] = true; });
 
   var allocByCategory = {};
   allocations.forEach(function(a) {
-    if (!filteredInvoiceIds[a.invoice_id]) return;
+    if (!filteredInvoiceIds[String(a.invoice_id)]) return;
     var cat = a.category;
     if (!allocByCategory[cat]) allocByCategory[cat] = { allocated: 0, paid: 0, outstanding: 0 };
     var amount = Number(a.amount) || 0;

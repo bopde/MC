@@ -186,6 +186,18 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+function idsMatch(a, b) {
+  var sa = String(a);
+  var sb = String(b);
+  if (sa === sb) return true;
+  return sa.replace(/^0+/, '') === sb.replace(/^0+/, '') && (sa !== '' && sb !== '');
+}
+
+function normalizeId(id) {
+  var s = String(id == null ? '' : id);
+  return s.replace(/^0+/, '') || s;
+}
+
 /**
  * Load all reference data via a single bootstrap RPC.
  * Massive speedup over 5 separate calls.
@@ -246,7 +258,7 @@ function currentMonth() {
  */
 function getCurrencyForBusiness(businessId) {
   if (!AppCache.businesses) return 'NZD';
-  var biz = AppCache.businesses.find(function(b) { return b.business_id === businessId; });
+  var biz = AppCache.businesses.find(function(b) { return idsMatch(b.business_id, businessId); });
   return (biz && biz.currency) || 'NZD';
 }
 
