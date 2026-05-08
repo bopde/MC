@@ -349,10 +349,11 @@ function dashHours(timeEntries, bizMap) {
 }
 
 function dashContracts(contracts) {
-  var html = '<article><header><h3 style="margin:0;">Contract Progress</h3></header>';
+  var html = '<article><header><h3 style="margin:0;">Contract Progress</h3>' +
+    '<p class="muted small" style="margin:0.25rem 0 0;">Not affected by date selection</p></header>';
 
   if (contracts.length === 0) {
-    html += '<p class="muted">No active contracts' +
+    html += '<p class="muted">No contracts' +
       (_dashBizFilter ? ' for this business' : '') + '.</p></article>';
     return html;
   }
