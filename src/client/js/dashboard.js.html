@@ -54,9 +54,10 @@ function renderDashContent() {
   var contractProgress = data.contractProgress || [];
 
   if (_dashBizFilter) {
-    invoices = invoices.filter(function(inv) { return String(inv.business_id) === _dashBizFilter; });
-    timeEntries = timeEntries.filter(function(te) { return String(te.business_id) === _dashBizFilter; });
-    contractProgress = contractProgress.filter(function(c) { return String(c.business_id) === _dashBizFilter; });
+    var bizFilter = String(_dashBizFilter);
+    invoices = invoices.filter(function(inv) { return String(inv.business_id || '') === bizFilter; });
+    timeEntries = timeEntries.filter(function(te) { return String(te.business_id || '') === bizFilter; });
+    contractProgress = contractProgress.filter(function(c) { return String(c.business_id || '') === bizFilter; });
   }
 
   var bizMap = {};

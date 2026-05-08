@@ -29,6 +29,7 @@ function getDashboardData(params) {
     var biz = bizMap[inv.business_id];
     return {
       invoice_id: inv.invoice_id,
+      business_id: inv.business_id,
       business_name: biz ? biz.name : 'Unknown',
       currency: biz ? (biz.currency || 'NZD') : 'NZD',
       created_date: inv.created_date,
