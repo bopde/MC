@@ -32,12 +32,19 @@ function loadDashboard() {
   var el = document.getElementById('dash-content');
   if (el) el.innerHTML = '<div aria-busy="true">Loading dashboard...</div>';
 
-  var dashPromise = serverCall('getDashboardData', { dateFrom: AppState.dateFrom, dateTo: AppState.dateTo });
+  var dashParams = { dateFrom: AppState.dateFrom, dateTo: AppState.dateTo };
+  if (_dashBizFilter) dashParams.businessId = _dashBizFilter;
+
+  var dashPromise = serverCall('getDashboardData', dashParams);
   var contractPromise = serverCall('getContractProgress');
 
   Promise.all([dashPromise, contractPromise]).then(function(results) {
     _dashData = results[0];
-    _dashData.contractProgress = results[1] || [];
+    var contracts = results[1] || [];
+    if (_dashBizFilter) {
+      contracts = contracts.filter(function(c) { return String(c.business_id || '') === String(_dashBizFilter); });
+    }
+    _dashData.contractProgress = contracts;
     renderDashContent();
   }).catch(function(err) {
     if (el) el.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
@@ -52,12 +59,6 @@ function renderDashContent() {
   var invoices = data.invoices || [];
   var timeEntries = data.timeEntries || [];
   var contractProgress = data.contractProgress || [];
-
-  if (_dashBizFilter) {
-    invoices = invoices.filter(function(inv) { return String(inv.business_id) === _dashBizFilter; });
-    timeEntries = timeEntries.filter(function(te) { return String(te.business_id) === _dashBizFilter; });
-    contractProgress = contractProgress.filter(function(c) { return String(c.business_id) === _dashBizFilter; });
-  }
 
   var bizMap = {};
   if (AppCache.businesses) {
@@ -369,10 +370,12 @@ function dashContracts(contracts) {
         '<span>' + formatCurrency(c.spent, c.currency) + ' / ' + formatCurrency(c.value, c.currency) + '</span>' +
         '<span>' + c.hours.toFixed(1) + ' hrs</span>' +
       '</div>' +
-      '<div class="progress-bar progress-bar--pacing" style="position:relative;">' +
-        '<div class="progress-bar__fill" style="width:' + pct + '%;background:var(--' + status + ');"></div>' +
-        '<div style="position:absolute;left:' + expectedPct + '%;top:-4px;width:3px;height:calc(100% + 8px);background:var(--ocean);border-radius:2px;opacity:0.85;"></div>' +
-        '<div style="position:absolute;left:calc(' + expectedPct + '% - 3px);top:-10px;width:0;height:0;border-left:4.5px solid transparent;border-right:4.5px solid transparent;border-top:6px solid var(--ocean);"></div>' +
+      '<div style="position:relative;height:22px;margin:0.25rem 0 0.5rem;">' +
+        '<div style="position:absolute;left:0;right:0;top:14px;height:6px;background:var(--rule-2);border-radius:3px;">' +
+          '<div style="height:100%;width:' + pct + '%;background:var(--' + status + ');border-radius:3px;transition:width 0.3s;"></div>' +
+        '</div>' +
+        '<div style="position:absolute;left:calc(' + expectedPct + '% - 4px);top:0;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--ocean);"></div>' +
+        '<div style="position:absolute;left:calc(' + expectedPct + '% - 1px);top:7px;width:2px;height:13px;background:var(--ocean);border-radius:1px;opacity:0.8;"></div>' +
       '</div>' +
       '<div class="dash-budget-item__detail">' +
         '<span>' + pct + '% spent' + (c.po_number ? ' &middot; PO ' + escapeHtml(c.po_number) : '') + '</span>' +
