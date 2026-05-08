@@ -6,6 +6,7 @@ function getDashboardData(params) {
   params = params || {};
   var dateFrom = params.dateFrom || '';
   var dateTo = params.dateTo || '';
+  var businessId = params.businessId || '';
   var from = dateFrom ? new Date(dateFrom) : null;
   var to = dateTo ? new Date(dateTo) : null;
   if (to) to.setHours(23, 59, 59);
@@ -24,7 +25,9 @@ function getDashboardData(params) {
   businesses.forEach(function(b) { bizMap[b.business_id] = b; });
 
   var invoices = invoicesRaw.filter(function(inv) {
-    return inRange(inv.created_date, from, to);
+    if (!inRange(inv.created_date, from, to)) return false;
+    if (businessId && String(inv.business_id) !== String(businessId)) return false;
+    return true;
   }).map(function(inv) {
     var biz = bizMap[inv.business_id];
     return {
@@ -40,7 +43,9 @@ function getDashboardData(params) {
   });
 
   var timeEntries = timeEntriesRaw.filter(function(te) {
-    return inRange(te.date, from, to);
+    if (!inRange(te.date, from, to)) return false;
+    if (businessId && String(te.business_id) !== String(businessId)) return false;
+    return true;
   }).map(function(te) {
     return {
       date: te.date,
@@ -51,7 +56,9 @@ function getDashboardData(params) {
   });
 
   var expenses = expensesRaw.filter(function(exp) {
-    return inRange(exp.date, from, to);
+    if (!inRange(exp.date, from, to)) return false;
+    if (businessId && String(exp.business_id) !== String(businessId)) return false;
+    return true;
   }).map(function(exp) {
     return {
       date: exp.date,
