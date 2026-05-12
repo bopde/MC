@@ -35,19 +35,12 @@ function loadDashboard() {
   var dashParams = { dateFrom: AppState.dateFrom, dateTo: AppState.dateTo };
   if (_dashBizFilter) dashParams.businessId = _dashBizFilter;
 
-  var dashPromise = serverCall('getDashboardData', dashParams);
-  var contractPromise = serverCall('getContractProgress');
-
-  Promise.all([dashPromise, contractPromise]).then(function(results) {
-    _dashData = results[0];
-    var contracts = results[1] || [];
-    if (_dashBizFilter) {
-      contracts = contracts.filter(function(c) { return idsMatch(c.business_id, _dashBizFilter); });
-    }
-    _dashData.contractProgress = contracts;
+  serverCall('getDashboardData', dashParams).then(function(data) {
+    _dashData = data;
     renderDashContent();
   }).catch(function(err) {
-    if (el) el.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+    var errEl = document.getElementById('dash-content');
+    if (errEl) errEl.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 

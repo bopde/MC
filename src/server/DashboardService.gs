@@ -115,12 +115,67 @@ function getDashboardData(params) {
     }
   });
 
+  var contracts = getAll('Contracts').filter(function(c) {
+    var s = String(c.status || '').trim().toLowerCase();
+    if (s === 'complete' || s === 'cancelled' || s === 'void') return false;
+    if (businessId && !idsMatch(c.business_id, businessId)) return false;
+    return true;
+  });
+
+  var contractProgress = contracts.map(function(c) {
+    var contractId = c.contract_id;
+    var cBizId = c.business_id;
+    var cFrom = new Date(c.date_from);
+    var cTo = new Date(c.date_to);
+    cTo.setHours(23, 59, 59);
+
+    var spent = 0, hrs = 0;
+    timeEntriesRaw.forEach(function(te) {
+      if (te.contract_id && idsMatch(te.contract_id, contractId)) {
+        spent += Number(te.line_total) || 0;
+        hrs += Number(te.hours) || 0;
+      } else if (idsMatch(te.business_id, cBizId) && !te.contract_id) {
+        var d = new Date(te.date);
+        if (d >= cFrom && d <= cTo) {
+          spent += Number(te.line_total) || 0;
+          hrs += Number(te.hours) || 0;
+        }
+      }
+    });
+
+    var value = Number(c.value) || 0;
+    var biz = bizMap[String(cBizId)];
+    var now = new Date();
+    var totalDays = Math.max(1, (cTo - cFrom) / 86400000);
+    var elapsedDays = Math.max(0, Math.min((now - cFrom) / 86400000, totalDays));
+    var daysRemaining = Math.max(0, Math.ceil((cTo - now) / 86400000));
+
+    return {
+      contract_id: c.contract_id,
+      business_id: cBizId,
+      business_name: biz ? biz.name : 'Unknown',
+      name: c.name,
+      po_number: c.po_number,
+      date_from: c.date_from,
+      date_to: c.date_to,
+      value: value,
+      currency: c.currency || 'NZD',
+      spent: spent,
+      hours: hrs,
+      days_remaining: daysRemaining,
+      total_days: Math.ceil(totalDays),
+      expected_pct: elapsedDays / totalDays,
+      actual_pct: value > 0 ? spent / value : 0
+    };
+  });
+
   return {
     invoices: invoices,
     timeEntries: timeEntries,
     expenses: expenses,
     budget: budget,
-    accountBalances: accountBalances
+    accountBalances: accountBalances,
+    contractProgress: contractProgress
   };
 }
 
