@@ -6,7 +6,7 @@
 
 var _loadedTimeEntries = [];
 var _loadedExpenses = [];
-var _hoursPreset = 'ytd';
+var _hoursPreset = 'week';
 var _editingEntryId = null;
 var _editingExpenseId = null;
 
@@ -202,7 +202,8 @@ function updateTimeAutofill(entries) {
 
   (entries || []).forEach(function(e) {
     if (e.date && String(e.date).slice(0, 10) === selectedDate && e.time_end) {
-      if (e.time_end > latestEnd) latestEnd = e.time_end;
+      var te = formatTime(e.time_end);
+      if (te > latestEnd) latestEnd = te;
     }
   });
 
@@ -330,8 +331,8 @@ function editTimeEntry(entryId) {
   document.getElementById('te-business').value = entry.business_id;
   filterContractsByBusiness(entry.business_id);
   document.getElementById('te-date').value = String(entry.date).slice(0, 10);
-  document.getElementById('te-start').value = entry.time_start;
-  document.getElementById('te-end').value = entry.time_end;
+  document.getElementById('te-start').value = formatTime(entry.time_start);
+  document.getElementById('te-end').value = formatTime(entry.time_end);
   document.getElementById('te-code').value = entry.work_code;
   document.getElementById('te-rate').value = entry.rate;
   document.getElementById('te-desc').value = entry.description || '';
