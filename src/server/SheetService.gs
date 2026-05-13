@@ -35,9 +35,20 @@ function getAll(sheetName) {
     var obj = {};
     for (var j = 0; j < headers.length; j++) {
       var val = data[i][j];
-      // Convert Date objects to ISO strings for JSON transport
+      // Convert Date objects to local-time strings for JSON transport
+      // (toISOString() shifts to UTC, corrupting time-only values)
       if (val instanceof Date) {
-        obj[headers[j]] = val.toISOString();
+        var y = val.getFullYear();
+        var mo = String(val.getMonth() + 1).padStart(2, '0');
+        var d = String(val.getDate()).padStart(2, '0');
+        var h = String(val.getHours()).padStart(2, '0');
+        var mi = String(val.getMinutes()).padStart(2, '0');
+        var s = String(val.getSeconds()).padStart(2, '0');
+        if (y < 1900) {
+          obj[headers[j]] = h + ':' + mi;
+        } else {
+          obj[headers[j]] = y + '-' + mo + '-' + d + 'T' + h + ':' + mi + ':' + s;
+        }
       } else {
         obj[headers[j]] = val;
       }
