@@ -7,6 +7,8 @@
 var _loadedTimeEntries = [];
 var _loadedExpenses = [];
 var _hoursPreset = 'ytd';
+var _editingEntryId = null;
+var _editingExpenseId = null;
 
 function renderHoursPage(container) {
   container.innerHTML =
@@ -37,7 +39,7 @@ function renderTimeEntryTab() {
   var codeSelected = codes.length === 1 ? codes[0].code_id : '';
   var defaultRate = '';
   if (bizSelected) {
-    var biz = businesses.find(function(b) { return b.business_id === bizSelected; });
+    var biz = businesses.find(function(b) { return idsMatch(b.business_id, bizSelected); });
     if (biz && biz.default_rate) defaultRate = biz.default_rate;
   }
 
@@ -58,7 +60,8 @@ function renderTimeEntryTab() {
       '</div>' +
       '<label>Description <input type="text" id="te-desc" placeholder="What did you work on?"></label>' +
       '<div class="form-actions">' +
-        '<button type="submit" class="btn-primary">Add entry</button>' +
+        '<button type="submit" class="btn-primary" id="te-submit-btn">Add entry</button>' +
+        '<button type="button" class="btn-subtle" id="te-cancel-edit" style="display:none" onclick="cancelTimeEntryEdit()">Cancel</button>' +
       '</div>' +
     '</form>' +
 
@@ -85,7 +88,7 @@ function renderTimeEntryTab() {
   // Auto-fill rate and filter contracts/codes when business changes
   document.getElementById('te-business').addEventListener('change', function() {
     var bizId = this.value;
-    var biz = businesses.find(function(b) { return b.business_id === bizId; });
+    var biz = businesses.find(function(b) { return idsMatch(b.business_id, bizId); });
     if (biz && biz.default_rate) {
       document.getElementById('te-rate').value = biz.default_rate;
     }
@@ -127,7 +130,7 @@ function filterContractsByBusiness(bizId) {
   var contractEl = document.getElementById('te-contract');
   if (!contractEl) return;
   var contracts = (AppCache.contracts || []).filter(function(c) {
-    return c.business_id === bizId;
+    return idsMatch(c.business_id, bizId);
   });
   var html = '<option value="">None</option>';
   contracts.forEach(function(c) {
@@ -139,7 +142,7 @@ function filterContractsByBusiness(bizId) {
   contractEl.parentNode.replaceChild(newEl, contractEl);
 
   newEl.addEventListener('change', function() {
-    var selected = contracts.find(function(c) { return c.contract_id === newEl.value; });
+    var selected = contracts.find(function(c) { return idsMatch(c.contract_id, newEl.value); });
     var codeEl = document.getElementById('te-code');
     if (!codeEl) return;
     if (selected && selected.work_codes) {
@@ -233,15 +236,22 @@ function renderTimeEntriesTable(entries) {
   var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
     '<th>Date</th><th>Business</th><th>Start</th><th>End</th><th>Code</th>' +
     '<th class="number">Hrs</th><th>Description</th>' +
-    '<th class="number">Amount</th><th>Inv</th>' +
+    '<th class="number">Amount</th><th>Actions</th>' +
     '</tr></thead><tbody>';
 
   entries.forEach(function(e) {
     var bizName = '';
     var currency = 'NZD';
     if (AppCache.businesses) {
-      var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
+      var biz = AppCache.businesses.find(function(b) { return idsMatch(b.business_id, e.business_id); });
       if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
+    }
+    var actionsHtml = '';
+    if (e.invoice_id && e.invoice_id !== '') {
+      actionsHtml = '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>';
+    } else {
+      actionsHtml = '<button type="button" class="btn-small btn-subtle" onclick="editTimeEntry(\'' + escapeHtml(e.entry_id) + '\')">Edit</button> ' +
+        '<button type="button" class="btn-small btn-subtle" onclick="deleteTimeEntry(\'' + escapeHtml(e.entry_id) + '\')">Delete</button>';
     }
     html += '<tr>' +
       '<td>' + formatDate(e.date) + '</td>' +
@@ -252,7 +262,7 @@ function renderTimeEntriesTable(entries) {
       '<td class="number">' + (Number(e.hours) || 0).toFixed(1) + '</td>' +
       '<td>' + escapeHtml(e.description) + '</td>' +
       '<td class="number">' + formatCurrency(e.line_total, currency) + '</td>' +
-      '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
+      '<td class="actions">' + actionsHtml + '</td>' +
       '</tr>';
   });
 
@@ -280,21 +290,80 @@ function submitTimeEntry(event) {
     contract_id: contractEl ? contractEl.value : ''
   };
 
-  var btn = event.target.querySelector('button[type="submit"]');
+  var btn = document.getElementById('te-submit-btn');
   btn.setAttribute('aria-busy', 'true');
 
-  serverCall('addTimeEntry', data).then(function(newEntry) {
-    showToast('Entry added');
-    document.getElementById('te-start').value = data.time_end;
-    document.getElementById('te-end').value = addHoursToTime(data.time_end, 1);
-    document.getElementById('te-desc').value = '';
-    _loadedTimeEntries.push(newEntry);
+  if (_editingEntryId) {
+    data.entry_id = _editingEntryId;
+    serverCall('updateTimeEntry', data).then(function(updated) {
+      showToast('Entry updated');
+      cancelTimeEntryEdit();
+      filterTimeEntries();
+    }).catch(function(err) {
+      showToast(err.message, 'error');
+    }).finally(function() {
+      btn.removeAttribute('aria-busy');
+    });
+  } else {
+    serverCall('addTimeEntry', data).then(function(newEntry) {
+      showToast('Entry added');
+      document.getElementById('te-start').value = data.time_end;
+      document.getElementById('te-end').value = addHoursToTime(data.time_end, 1);
+      document.getElementById('te-desc').value = '';
+      _loadedTimeEntries.push(newEntry);
+      renderTimeEntriesTable(_loadedTimeEntries);
+      updateTimeAutofill(_loadedTimeEntries);
+    }).catch(function(err) {
+      showToast(err.message, 'error');
+    }).finally(function() {
+      btn.removeAttribute('aria-busy');
+    });
+  }
+}
+
+function editTimeEntry(entryId) {
+  var entry = _loadedTimeEntries.find(function(e) { return idsMatch(e.entry_id, entryId); });
+  if (!entry) { showToast('Entry not found', 'error'); return; }
+
+  _editingEntryId = entryId;
+
+  document.getElementById('te-business').value = entry.business_id;
+  filterContractsByBusiness(entry.business_id);
+  document.getElementById('te-date').value = String(entry.date).slice(0, 10);
+  document.getElementById('te-start').value = entry.time_start;
+  document.getElementById('te-end').value = entry.time_end;
+  document.getElementById('te-code').value = entry.work_code;
+  document.getElementById('te-rate').value = entry.rate;
+  document.getElementById('te-desc').value = entry.description || '';
+
+  setTimeout(function() {
+    var contractEl = document.getElementById('te-contract');
+    if (contractEl && entry.contract_id) contractEl.value = entry.contract_id;
+  }, 50);
+
+  var btn = document.getElementById('te-submit-btn');
+  btn.textContent = 'Save Changes';
+  document.getElementById('te-cancel-edit').style.display = '';
+  document.getElementById('time-entry-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelTimeEntryEdit() {
+  _editingEntryId = null;
+  var btn = document.getElementById('te-submit-btn');
+  if (btn) btn.textContent = 'Add entry';
+  var cancelBtn = document.getElementById('te-cancel-edit');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  document.getElementById('te-desc').value = '';
+}
+
+function deleteTimeEntry(entryId) {
+  if (!confirm('Delete this time entry?')) return;
+  serverCall('deleteTimeEntry', entryId).then(function() {
+    showToast('Entry deleted');
+    _loadedTimeEntries = _loadedTimeEntries.filter(function(e) { return !idsMatch(e.entry_id, entryId); });
     renderTimeEntriesTable(_loadedTimeEntries);
-    updateTimeAutofill(_loadedTimeEntries);
   }).catch(function(err) {
     showToast(err.message, 'error');
-  }).finally(function() {
-    btn.removeAttribute('aria-busy');
   });
 }
 
@@ -319,7 +388,8 @@ function renderExpenseTab() {
       '</div>' +
       '<label>What for <input type="text" id="exp-desc" placeholder="Description" required></label>' +
       '<div class="form-actions">' +
-        '<button type="submit" class="btn-primary">Add expense</button>' +
+        '<button type="submit" class="btn-primary" id="exp-submit-btn">Add expense</button>' +
+        '<button type="button" class="btn-subtle" id="exp-cancel-edit" style="display:none" onclick="cancelExpenseEdit()">Cancel</button>' +
       '</div>' +
     '</form>' +
 
@@ -366,22 +436,29 @@ function renderExpensesTable(expenses) {
 
   var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
     '<th>Date</th><th>Business</th><th>What</th>' +
-    '<th class="number">Amount</th><th>Inv</th>' +
+    '<th class="number">Amount</th><th>Actions</th>' +
     '</tr></thead><tbody>';
 
   expenses.forEach(function(e) {
     var bizName = '';
     var currency = 'NZD';
     if (AppCache.businesses) {
-      var biz = AppCache.businesses.find(function(b) { return b.business_id === e.business_id; });
+      var biz = AppCache.businesses.find(function(b) { return idsMatch(b.business_id, e.business_id); });
       if (biz) { bizName = biz.name; currency = biz.currency || 'NZD'; }
+    }
+    var actionsHtml = '';
+    if (e.invoice_id && e.invoice_id !== '') {
+      actionsHtml = '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>';
+    } else {
+      actionsHtml = '<button type="button" class="btn-small btn-subtle" onclick="editExpense(\'' + escapeHtml(e.expense_id) + '\')">Edit</button> ' +
+        '<button type="button" class="btn-small btn-subtle" onclick="deleteExpense(\'' + escapeHtml(e.expense_id) + '\')">Delete</button>';
     }
     html += '<tr>' +
       '<td>' + formatDate(e.date) + '</td>' +
       '<td>' + escapeHtml(bizName) + '</td>' +
       '<td>' + escapeHtml(e.description) + '</td>' +
       '<td class="number">' + formatCurrency(e.amount, currency) + '</td>' +
-      '<td>' + (e.invoice_id ? '<span class="badge badge-paid">' + escapeHtml(e.invoice_id) + '</span>' : '') + '</td>' +
+      '<td class="actions">' + actionsHtml + '</td>' +
       '</tr>';
   });
 
@@ -402,19 +479,71 @@ function submitExpense(event) {
     work_code: document.getElementById('exp-code').value
   };
 
-  var btn = event.target.querySelector('button[type="submit"]');
+  var btn = document.getElementById('exp-submit-btn');
   btn.setAttribute('aria-busy', 'true');
 
-  serverCall('addExpense', data).then(function(newExpense) {
-    showToast('Expense added');
-    document.getElementById('exp-amount').value = '';
-    document.getElementById('exp-desc').value = '';
-    _loadedExpenses.push(newExpense);
+  if (_editingExpenseId) {
+    data.expense_id = _editingExpenseId;
+    serverCall('updateExpense', data).then(function(updated) {
+      showToast('Expense updated');
+      cancelExpenseEdit();
+      loadExpenses();
+    }).catch(function(err) {
+      showToast(err.message, 'error');
+    }).finally(function() {
+      btn.removeAttribute('aria-busy');
+    });
+  } else {
+    serverCall('addExpense', data).then(function(newExpense) {
+      showToast('Expense added');
+      document.getElementById('exp-amount').value = '';
+      document.getElementById('exp-desc').value = '';
+      _loadedExpenses.push(newExpense);
+      renderExpensesTable(_loadedExpenses);
+    }).catch(function(err) {
+      showToast(err.message, 'error');
+    }).finally(function() {
+      btn.removeAttribute('aria-busy');
+    });
+  }
+}
+
+function editExpense(expenseId) {
+  var expense = _loadedExpenses.find(function(e) { return idsMatch(e.expense_id, expenseId); });
+  if (!expense) { showToast('Expense not found', 'error'); return; }
+
+  _editingExpenseId = expenseId;
+
+  document.getElementById('exp-business').value = expense.business_id;
+  document.getElementById('exp-date').value = String(expense.date).slice(0, 10);
+  document.getElementById('exp-amount').value = expense.amount;
+  document.getElementById('exp-desc').value = expense.description || '';
+  document.getElementById('exp-code').value = expense.work_code;
+
+  var btn = document.getElementById('exp-submit-btn');
+  btn.textContent = 'Save Changes';
+  document.getElementById('exp-cancel-edit').style.display = '';
+  document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelExpenseEdit() {
+  _editingExpenseId = null;
+  var btn = document.getElementById('exp-submit-btn');
+  if (btn) btn.textContent = 'Add expense';
+  var cancelBtn = document.getElementById('exp-cancel-edit');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+}
+
+function deleteExpense(expenseId) {
+  if (!confirm('Delete this expense?')) return;
+  serverCall('deleteExpense', expenseId).then(function() {
+    showToast('Expense deleted');
+    _loadedExpenses = _loadedExpenses.filter(function(e) { return !idsMatch(e.expense_id, expenseId); });
     renderExpensesTable(_loadedExpenses);
   }).catch(function(err) {
     showToast(err.message, 'error');
-  }).finally(function() {
-    btn.removeAttribute('aria-busy');
   });
 }
 </script>

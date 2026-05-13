@@ -397,7 +397,7 @@ function renderCreateInvoice() {
   document.getElementById('inv-business').addEventListener('change', function() {
     var bizId = this.value;
     var contractEl = document.getElementById('inv-contract');
-    var contracts = (AppCache.contracts || []).filter(function(c) { return c.business_id === bizId; });
+    var contracts = (AppCache.contracts || []).filter(function(c) { return idsMatch(c.business_id, bizId); });
     var html = '<option value="">All (no filter)</option>';
     contracts.forEach(function(c) {
       html += '<option value="' + escapeHtml(c.contract_id) + '">' + escapeHtml(c.name) +
@@ -527,7 +527,7 @@ function confirmCreateInvoice() {
 
   var contractEl = document.getElementById('inv-contract');
   var contractId = contractEl ? contractEl.value : '';
-  var contract = contractId ? (AppCache.contracts || []).find(function(c) { return c.contract_id === contractId; }) : null;
+  var contract = contractId ? (AppCache.contracts || []).find(function(c) { return idsMatch(c.contract_id, contractId); }) : null;
 
   var params = {
     businessId: document.getElementById('inv-business').value,
