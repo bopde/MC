@@ -36,7 +36,7 @@ function saveAccountSummary(data) {
     var month = normaliseMonth(data.month);
 
     var existing = getAll('AccountSummaries').find(function(s) {
-      return s.account_id === data.account_id && normaliseMonth(s.month) === month;
+      return idsMatch(s.account_id, data.account_id) && normaliseMonth(s.month) === month;
     });
 
     var payload = {
@@ -90,11 +90,11 @@ function getAccountSummariesForMonth(month) {
 
   var accounts = getAll('Accounts');
   var accMap = {};
-  accounts.forEach(function(a) { accMap[a.account_id] = a; });
+  accounts.forEach(function(a) { accMap[String(a.account_id)] = a; });
 
   function enrich(arr) {
     return arr.map(function(s) {
-      var acc = accMap[s.account_id];
+      var acc = accMap[String(s.account_id)];
       s.account_name = acc ? acc.name : 'Unknown';
       s.account_type = acc ? acc.type : '';
       s.currency = acc ? acc.currency : 'NZD';

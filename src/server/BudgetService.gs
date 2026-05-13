@@ -155,10 +155,10 @@ function getBudgetSummary(params) {
   var businesses = getAll('Businesses');
 
   var bizMap = {};
-  businesses.forEach(function(b) { bizMap[b.business_id] = b.name; });
+  businesses.forEach(function(b) { bizMap[String(b.business_id)] = b.name; });
 
   var invMap = {};
-  invoices.forEach(function(inv) { invMap[inv.invoice_id] = inv; });
+  invoices.forEach(function(inv) { invMap[String(inv.invoice_id)] = inv; });
 
   var byCat = {};
   BUDGET_CATEGORIES.forEach(function(cat) {
@@ -178,7 +178,7 @@ function getBudgetSummary(params) {
 
     var amount = Number(a.amount) || 0;
     var status = normaliseAllocationStatus(a.status);
-    var inv = invMap[a.invoice_id] || {};
+    var inv = invMap[String(a.invoice_id)] || {};
 
     byCat[cat].allocated += amount;
     if (status === 'paid') {
@@ -190,7 +190,7 @@ function getBudgetSummary(params) {
     byCat[cat].items.push({
       allocation_id: a.allocation_id,
       invoice_id: a.invoice_id,
-      business_name: bizMap[inv.business_id] || 'Unknown',
+      business_name: bizMap[String(inv.business_id)] || 'Unknown',
       amount: amount,
       status: status,
       transfer_date: a.transfer_date || '',

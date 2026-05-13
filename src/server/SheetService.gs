@@ -119,6 +119,16 @@ function updateRow(sheetName, rowIndex, data) {
 }
 
 /**
+ * Delete a row by its row index (1-based sheet row number).
+ */
+function deleteRow(sheetName, rowIndex) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('Sheet not found: ' + sheetName);
+  sheet.deleteRow(rowIndex);
+}
+
+/**
  * Compare two ID values allowing for Sheets stripping leading zeros.
  */
 function idsMatch(a, b) {

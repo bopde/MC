@@ -14,16 +14,16 @@ function getUninvoicedItemsInternal(businessId, dateFrom, dateTo, contractId) {
 
   var timeEntries = getAll('TimeEntries').filter(function(te) {
     var d = new Date(te.date);
-    if (te.business_id !== businessId) return false;
+    if (!idsMatch(te.business_id, businessId)) return false;
     if (te.invoice_id && te.invoice_id !== '') return false;
     if (d < from || d > to) return false;
-    if (conIdStr && String(te.contract_id || '') !== conIdStr) return false;
+    if (conIdStr && !idsMatch(te.contract_id || '', conIdStr)) return false;
     return true;
   });
 
   var expenses = getAll('Expenses').filter(function(exp) {
     var d = new Date(exp.date);
-    if (exp.business_id !== businessId) return false;
+    if (!idsMatch(exp.business_id, businessId)) return false;
     if (exp.invoice_id && exp.invoice_id !== '') return false;
     if (d < from || d > to) return false;
     return true;
@@ -320,10 +320,10 @@ function getInvoicesWithDetails(params) {
   }
   var businesses = getAll('Businesses');
   var bizMap = {};
-  businesses.forEach(function(b) { bizMap[b.business_id] = b; });
+  businesses.forEach(function(b) { bizMap[String(b.business_id)] = b; });
 
   return invoices.map(function(inv) {
-    var biz = bizMap[inv.business_id];
+    var biz = bizMap[String(inv.business_id)];
     inv.business_name = biz ? biz.name : 'Unknown';
     inv.currency = biz ? biz.currency : 'NZD';
     return inv;
