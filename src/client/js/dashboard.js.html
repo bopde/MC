@@ -65,54 +65,17 @@ function renderDashContent() {
   }
 
   var html = '';
-  html += dashTiles(invoices, data.accountBalances || []);
   html += dashHours(timeEntries, bizMap);
   html += dashChart(timeEntries, bizMap);
-  html += dashStatusTiles(invoices);
   html += dashContracts(contractProgress);
   if (data.budget && data.budget.length > 0) {
     html += dashBudget(data.budget);
   }
+  html += dashStatusTiles(invoices);
 
   el.innerHTML = html;
 }
 
-function dashTiles(invoices, accountBalances) {
-  var unpaidByCur = {};
-  var unpaidCount = 0;
-  invoices.forEach(function(inv) {
-    if (inv.status !== 'sent') return;
-    var cur = inv.currency || 'NZD';
-    unpaidByCur[cur] = (unpaidByCur[cur] || 0) + inv.total;
-    unpaidCount++;
-  });
-
-  var html = '<section class="flow-overview">';
-
-  if (!_dashBizFilter) {
-    var cashByCur = {};
-    accountBalances.forEach(function(ab) {
-      cashByCur[ab.currency] = (cashByCur[ab.currency] || 0) + ab.balance;
-    });
-    var cashCurs = Object.keys(cashByCur);
-    cashCurs.forEach(function(cur) {
-      html += dashTile('Cash Position' + (cashCurs.length > 1 ? ' (' + cur + ')' : ''),
-        formatCurrency(cashByCur[cur], cur), accountBalances.length + ' accounts', 'total');
-    });
-  }
-
-  var unpaidCurs = Object.keys(unpaidByCur);
-  if (unpaidCurs.length > 0) {
-    unpaidCurs.forEach(function(cur) {
-      html += dashTile('Unpaid' + (unpaidCurs.length > 1 ? ' (' + cur + ')' : ''),
-        formatCurrency(unpaidByCur[cur], cur),
-        unpaidCount + ' sent', 'outstanding');
-    });
-  }
-
-  html += '</section>';
-  return html;
-}
 
 function dashTile(label, value, detail, type) {
   var cls = type === 'total' ? 'flow-tile--total' :
