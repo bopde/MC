@@ -65,94 +65,17 @@ function renderDashContent() {
   }
 
   var html = '';
-  html += dashTiles(invoices, data.budget || [], data.accountBalances || [], timeEntries, bizMap);
-  html += dashContracts(contractProgress);
-  html += dashChart(invoices);
-  html += '<div class="dash-columns">';
-  html += dashOverdue(invoices);
   html += dashHours(timeEntries, bizMap);
-  html += '</div>';
+  html += dashChart(timeEntries, bizMap);
+  html += dashContracts(contractProgress);
   if (data.budget && data.budget.length > 0) {
     html += dashBudget(data.budget);
   }
+  html += dashStatusTiles(invoices);
 
   el.innerHTML = html;
 }
 
-function dashTiles(invoices, budget, accountBalances, timeEntries, bizMap) {
-  var revByCur = {};
-  var invCountByCur = {};
-  invoices.forEach(function(inv) {
-    if (inv.status === 'void') return;
-    var cur = inv.currency || 'NZD';
-    revByCur[cur] = (revByCur[cur] || 0) + inv.total;
-    invCountByCur[cur] = (invCountByCur[cur] || 0) + 1;
-  });
-
-  var unpaidByCur = {};
-  var unpaidCount = 0;
-  invoices.forEach(function(inv) {
-    if (inv.status !== 'sent') return;
-    var cur = inv.currency || 'NZD';
-    unpaidByCur[cur] = (unpaidByCur[cur] || 0) + inv.total;
-    unpaidCount++;
-  });
-
-  var taxOwed = 0;
-  budget.forEach(function(b) {
-    if (b.category.indexOf('Tax') !== -1 || b.category.indexOf('ACC') !== -1) {
-      taxOwed += b.outstanding;
-    }
-  });
-
-  var totalHours = 0;
-  timeEntries.forEach(function(te) {
-    totalHours += te.hours;
-  });
-
-  var html = '<section class="flow-overview">';
-
-  if (!_dashBizFilter) {
-    var cashByCur = {};
-    accountBalances.forEach(function(ab) {
-      cashByCur[ab.currency] = (cashByCur[ab.currency] || 0) + ab.balance;
-    });
-    var cashCurs = Object.keys(cashByCur);
-    cashCurs.forEach(function(cur) {
-      html += dashTile('Cash Position' + (cashCurs.length > 1 ? ' (' + cur + ')' : ''),
-        formatCurrency(cashByCur[cur], cur), accountBalances.length + ' accounts', 'total');
-    });
-  }
-
-  var revCurs = Object.keys(revByCur);
-  if (revCurs.length > 0) {
-    revCurs.forEach(function(cur) {
-      html += dashTile('Revenue' + (revCurs.length > 1 ? ' (' + cur + ')' : ''),
-        formatCurrency(revByCur[cur], cur),
-        (invCountByCur[cur] || 0) + ' invoices', 'paid');
-    });
-  } else {
-    html += dashTile('Revenue', formatCurrency(0), 'no invoices this period', 'paid');
-  }
-
-  var unpaidCurs = Object.keys(unpaidByCur);
-  if (unpaidCurs.length > 0) {
-    unpaidCurs.forEach(function(cur) {
-      html += dashTile('Unpaid' + (unpaidCurs.length > 1 ? ' (' + cur + ')' : ''),
-        formatCurrency(unpaidByCur[cur], cur),
-        unpaidCount + ' sent', 'outstanding');
-    });
-  }
-
-  if (taxOwed > 0) {
-    html += dashTile('Tax & ACC Owed', formatCurrency(taxOwed), 'allocated, not yet paid', 'warn');
-  }
-
-  html += dashTile('Hours', totalHours.toFixed(1), timeEntries.length + ' entries', 'paid');
-
-  html += '</section>';
-  return html;
-}
 
 function dashTile(label, value, detail, type) {
   var cls = type === 'total' ? 'flow-tile--total' :
@@ -166,25 +89,26 @@ function dashTile(label, value, detail, type) {
   '</div>';
 }
 
-function dashChart(invoices) {
+function dashChart(timeEntries, bizMap) {
   var byCur = {};
-  invoices.forEach(function(inv) {
-    if (inv.status === 'void') return;
-    var cur = inv.currency || 'NZD';
-    var dateStr = String(inv.created_date || '');
+  timeEntries.forEach(function(te) {
+    var biz = bizMap[normalizeId(te.business_id)];
+    var cur = (biz && biz.currency) ? biz.currency : 'NZD';
+    var dateStr = String(te.date || '');
     var m = dateStr.match(/(\d{4})-(\d{1,2})/);
     if (!m) return;
     var key = m[1] + '-' + String(parseInt(m[2], 10)).padStart(2, '0');
     if (!byCur[cur]) byCur[cur] = {};
-    byCur[cur][key] = (byCur[cur][key] || 0) + inv.total;
+    if (!byCur[cur][key]) byCur[cur][key] = { hours: 0, income: 0 };
+    byCur[cur][key].hours += te.hours;
+    byCur[cur][key].income += te.line_total;
   });
 
   var currencies = Object.keys(byCur);
   if (currencies.length === 0) {
-    return '<article><p class="muted">No revenue data to chart for this period.</p></article>';
+    return '<article><p class="muted">No hours data to chart for this period.</p></article>';
   }
 
-  // Determine month range from filter dates
   var fromDate = new Date(AppState.dateFrom || new Date().getFullYear() + '-01-01');
   var toDate = new Date(AppState.dateTo || new Date().getFullYear() + '-12-31');
   var months = [];
@@ -197,47 +121,83 @@ function dashChart(invoices) {
   var html = '';
   currencies.forEach(function(cur) {
     var monthData = byCur[cur];
-    var max = 0;
+    var maxH = 0, maxI = 0;
     months.forEach(function(mo) {
-      if ((monthData[mo] || 0) > max) max = monthData[mo];
+      var d = monthData[mo] || { hours: 0, income: 0 };
+      if (d.hours > maxH) maxH = d.hours;
+      if (d.income > maxI) maxI = d.income;
     });
-    if (max === 0) return;
+    if (maxH === 0 && maxI === 0) return;
 
-    var padTop = 26;
+    var padL = 42, padR = 50, padTop = 24, padBot = 22;
+    var step = 60;
+    var chartW = Math.max(months.length * step, 120);
     var chartH = 130;
-    var labelH = 18;
-    var totalH = padTop + chartH + labelH;
-    var barW = 48;
-    var gap = 12;
-    var totalW = months.length * (barW + gap) - gap;
+    var totalW = padL + chartW + padR;
+    var totalH = padTop + chartH + padBot;
+
+    function xPos(idx) { return padL + idx * step + step / 2; }
+    function yHours(v) { return maxH > 0 ? padTop + chartH - (v / maxH) * chartH : padTop + chartH; }
+    function yIncome(v) { return maxI > 0 ? padTop + chartH - (v / maxI) * chartH : padTop + chartH; }
+
+    var hoursPoints = [], incomePoints = [];
+    months.forEach(function(mo, idx) {
+      var dd = monthData[mo] || { hours: 0, income: 0 };
+      hoursPoints.push(xPos(idx) + ',' + yHours(dd.hours));
+      incomePoints.push(xPos(idx) + ',' + yIncome(dd.income));
+    });
 
     html += '<article class="dash-chart">' +
-      '<header><h3 style="margin:0;">Revenue by Month' +
+      '<header><h3 style="margin:0;">Hours &amp; Income by Month' +
       (currencies.length > 1 ? ' <small class="muted">(' + escapeHtml(cur) + ')</small>' : '') +
-      '</h3></header>' +
+      '</h3>' +
+      '<div style="display:flex;gap:1rem;font-size:11px;margin-top:4px;">' +
+      '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--sage)" stroke-width="2"/></svg> Hours</span>' +
+      '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--ocean)" stroke-width="2"/></svg> Income</span>' +
+      '</div></header>' +
       '<div class="scroll-x">' +
       '<svg viewBox="0 0 ' + totalW + ' ' + totalH + '" class="revenue-chart" preserveAspectRatio="xMidYMid meet">';
 
+    // Grid lines
+    for (var g = 0; g <= 4; g++) {
+      var gy = padTop + (chartH / 4) * g;
+      html += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (padL + chartW) + '" y2="' + gy + '" stroke="var(--rule)" stroke-width="0.5"/>';
+    }
+
+    // Y-axis labels — hours (left)
+    if (maxH > 0) {
+      html += '<text x="' + (padL - 4) + '" y="' + (padTop + 4) + '" text-anchor="end" font-size="9" fill="var(--sage)">' + Math.round(maxH) + 'h</text>';
+      html += '<text x="' + (padL - 4) + '" y="' + (padTop + chartH) + '" text-anchor="end" font-size="9" fill="var(--sage)">0</text>';
+    }
+    // Y-axis labels — income (right)
+    if (maxI > 0) {
+      html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + 4) + '" text-anchor="start" font-size="9" fill="var(--ocean)">' + dashCompact(maxI, cur) + '</text>';
+      html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + chartH) + '" text-anchor="start" font-size="9" fill="var(--ocean)">0</text>';
+    }
+
+    // Hours line
+    html += '<polyline points="' + hoursPoints.join(' ') + '" fill="none" stroke="var(--sage)" stroke-width="2" stroke-linejoin="round"/>';
+    // Income line
+    html += '<polyline points="' + incomePoints.join(' ') + '" fill="none" stroke="var(--ocean)" stroke-width="2" stroke-linejoin="round"/>';
+
+    // Data points and labels
     months.forEach(function(mo, idx) {
-      var v = monthData[mo] || 0;
-      var barH = max > 0 ? Math.max((v / max) * chartH, v > 0 ? 3 : 0) : 0;
-      var x = idx * (barW + gap);
-      var y = padTop + chartH - barH;
+      var dd = monthData[mo] || { hours: 0, income: 0 };
+      var cx = xPos(idx);
 
-      html += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + barH +
-              '" fill="' + (v > 0 ? 'var(--sage)' : 'var(--rule)') + '"' +
-              ' rx="2"/>';
-
-      if (v > 0) {
-        html += '<text x="' + (x + barW/2) + '" y="' + (y - 6) + '" text-anchor="middle" ' +
-                'font-size="9" font-weight="500" fill="var(--ocean)">' +
-                dashCompact(v, cur) + '</text>';
+      if (dd.hours > 0) {
+        var hyy = yHours(dd.hours);
+        html += '<circle cx="' + cx + '" cy="' + hyy + '" r="3" fill="var(--sage)"/>';
+        html += '<text x="' + cx + '" y="' + (hyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--sage)">' + dd.hours.toFixed(1) + '</text>';
+      }
+      if (dd.income > 0) {
+        var iyy = yIncome(dd.income);
+        html += '<circle cx="' + cx + '" cy="' + iyy + '" r="3" fill="var(--ocean)"/>';
+        html += '<text x="' + cx + '" y="' + (iyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--ocean)">' + dashCompact(dd.income, cur) + '</text>';
       }
 
       var moNum = parseInt(mo.split('-')[1], 10);
-      html += '<text x="' + (x + barW/2) + '" y="' + (totalH - 2) + '" text-anchor="middle" ' +
-              'font-size="10" fill="var(--ocean)">' +
-              MONTHS_SHORT[moNum - 1] + '</text>';
+      html += '<text x="' + cx + '" y="' + (totalH - 4) + '" text-anchor="middle" font-size="10" fill="var(--ocean)">' + MONTHS_SHORT[moNum - 1] + '</text>';
     });
 
     html += '</svg></div></article>';
@@ -253,39 +213,56 @@ function dashCompact(amount, cur) {
   return s + amount.toFixed(0);
 }
 
-function dashOverdue(invoices) {
+function dashStatusTiles(invoices) {
   var now = new Date();
-  var overdue = [];
+  var overdueByCur = {};
+  var overdueCount = 0;
+  var unallocByCur = {};
+  var unallocCount = 0;
+
   invoices.forEach(function(inv) {
-    if (inv.status !== 'sent') return;
-    var d = new Date(inv.created_date);
-    var days = Math.floor((now - d) / 86400000);
-    if (days > 14) {
-      overdue.push({ invoice_id: inv.invoice_id, business_name: inv.business_name, total: inv.total, currency: inv.currency, days: days });
+    if (inv.status === 'void') return;
+    var cur = inv.currency || 'NZD';
+
+    if (inv.status === 'sent') {
+      var days = Math.floor((now - new Date(inv.created_date)) / 86400000);
+      if (days > 14) {
+        overdueByCur[cur] = (overdueByCur[cur] || 0) + inv.total;
+        overdueCount++;
+      }
+    }
+
+    if (!inv.allocated && inv.status !== 'void') {
+      unallocByCur[cur] = (unallocByCur[cur] || 0) + inv.total;
+      unallocCount++;
     }
   });
-  overdue.sort(function(a, b) { return b.days - a.days; });
 
-  var html = '<article><header><h3 style="margin:0;">Overdue Invoices</h3></header>';
+  var html = '<section class="flow-overview">';
 
-  if (overdue.length === 0) {
-    html += '<p class="muted">No overdue invoices. All sent invoices are within 14 days.</p>';
-  } else {
-    html += '<table class="data-table data-table--compact"><thead><tr>' +
-      '<th>Invoice</th><th>Business</th><th class="number">Amount</th><th>Age</th>' +
-      '</tr></thead><tbody>';
-    overdue.forEach(function(inv) {
-      html += '<tr>' +
-        '<td><a href="#invoices"><strong>' + escapeHtml(inv.invoice_id) + '</strong></a></td>' +
-        '<td>' + escapeHtml(inv.business_name) + '</td>' +
-        '<td class="number">' + formatCurrency(inv.total, inv.currency) + '</td>' +
-        '<td><span class="badge" style="background:var(--danger-bg);color:var(--danger);">' + inv.days + 'd</span></td>' +
-        '</tr>';
+  var overdueCurs = Object.keys(overdueByCur);
+  if (overdueCount > 0) {
+    overdueCurs.forEach(function(cur) {
+      html += dashTile('Overdue' + (overdueCurs.length > 1 ? ' (' + cur + ')' : ''),
+        formatCurrency(overdueByCur[cur], cur),
+        overdueCount + ' invoice' + (overdueCount !== 1 ? 's' : '') + ' past 14d', 'warn');
     });
-    html += '</tbody></table>';
+  } else {
+    html += dashTile('Overdue', '0', 'no overdue invoices', 'paid');
   }
 
-  html += '</article>';
+  var unallocCurs = Object.keys(unallocByCur);
+  if (unallocCount > 0) {
+    unallocCurs.forEach(function(cur) {
+      html += dashTile('Unallocated' + (unallocCurs.length > 1 ? ' (' + cur + ')' : ''),
+        formatCurrency(unallocByCur[cur], cur),
+        unallocCount + ' invoice' + (unallocCount !== 1 ? 's' : ''), 'outstanding');
+    });
+  } else {
+    html += dashTile('Unallocated', '0', 'all invoices allocated', 'paid');
+  }
+
+  html += '</section>';
   return html;
 }
 

@@ -70,9 +70,11 @@ function getDashboardData(params) {
   var filteredInvoiceIds = {};
   invoices.forEach(function(inv) { filteredInvoiceIds[String(inv.invoice_id)] = true; });
 
+  var allocatedInvIds = {};
   var allocByCategory = {};
   allocations.forEach(function(a) {
     if (!filteredInvoiceIds[String(a.invoice_id)]) return;
+    allocatedInvIds[String(a.invoice_id)] = true;
     var cat = a.category;
     if (!allocByCategory[cat]) allocByCategory[cat] = { allocated: 0, paid: 0, outstanding: 0 };
     var amount = Number(a.amount) || 0;
@@ -80,6 +82,10 @@ function getDashboardData(params) {
     allocByCategory[cat].allocated += amount;
     if (isPaid) allocByCategory[cat].paid += amount;
     else allocByCategory[cat].outstanding += amount;
+  });
+
+  invoices.forEach(function(inv) {
+    inv.allocated = !!allocatedInvIds[String(inv.invoice_id)];
   });
 
   var budget = BUDGET_CATEGORIES.map(function(cat) {
