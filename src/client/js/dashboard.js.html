@@ -65,13 +65,11 @@ function renderDashContent() {
   }
 
   var html = '';
-  html += dashTiles(invoices, data.budget || [], data.accountBalances || [], timeEntries, bizMap);
-  html += dashContracts(contractProgress);
-  html += dashChart(timeEntries, bizMap);
-  html += '<div class="dash-columns">';
-  html += dashOverdue(invoices);
+  html += dashTiles(invoices, data.accountBalances || []);
   html += dashHours(timeEntries, bizMap);
-  html += '</div>';
+  html += dashChart(timeEntries, bizMap);
+  html += dashStatusTiles(invoices);
+  html += dashContracts(contractProgress);
   if (data.budget && data.budget.length > 0) {
     html += dashBudget(data.budget);
   }
@@ -79,16 +77,7 @@ function renderDashContent() {
   el.innerHTML = html;
 }
 
-function dashTiles(invoices, budget, accountBalances, timeEntries, bizMap) {
-  var revByCur = {};
-  var invCountByCur = {};
-  invoices.forEach(function(inv) {
-    if (inv.status === 'void') return;
-    var cur = inv.currency || 'NZD';
-    revByCur[cur] = (revByCur[cur] || 0) + inv.total;
-    invCountByCur[cur] = (invCountByCur[cur] || 0) + 1;
-  });
-
+function dashTiles(invoices, accountBalances) {
   var unpaidByCur = {};
   var unpaidCount = 0;
   invoices.forEach(function(inv) {
@@ -96,18 +85,6 @@ function dashTiles(invoices, budget, accountBalances, timeEntries, bizMap) {
     var cur = inv.currency || 'NZD';
     unpaidByCur[cur] = (unpaidByCur[cur] || 0) + inv.total;
     unpaidCount++;
-  });
-
-  var taxOwed = 0;
-  budget.forEach(function(b) {
-    if (b.category.indexOf('Tax') !== -1 || b.category.indexOf('ACC') !== -1) {
-      taxOwed += b.outstanding;
-    }
-  });
-
-  var totalHours = 0;
-  timeEntries.forEach(function(te) {
-    totalHours += te.hours;
   });
 
   var html = '<section class="flow-overview">';
@@ -124,17 +101,6 @@ function dashTiles(invoices, budget, accountBalances, timeEntries, bizMap) {
     });
   }
 
-  var revCurs = Object.keys(revByCur);
-  if (revCurs.length > 0) {
-    revCurs.forEach(function(cur) {
-      html += dashTile('Revenue' + (revCurs.length > 1 ? ' (' + cur + ')' : ''),
-        formatCurrency(revByCur[cur], cur),
-        (invCountByCur[cur] || 0) + ' invoices', 'paid');
-    });
-  } else {
-    html += dashTile('Revenue', formatCurrency(0), 'no invoices this period', 'paid');
-  }
-
   var unpaidCurs = Object.keys(unpaidByCur);
   if (unpaidCurs.length > 0) {
     unpaidCurs.forEach(function(cur) {
@@ -143,12 +109,6 @@ function dashTiles(invoices, budget, accountBalances, timeEntries, bizMap) {
         unpaidCount + ' sent', 'outstanding');
     });
   }
-
-  if (taxOwed > 0) {
-    html += dashTile('Tax & ACC Owed', formatCurrency(taxOwed), 'allocated, not yet paid', 'warn');
-  }
-
-  html += dashTile('Hours', totalHours.toFixed(1), timeEntries.length + ' entries', 'paid');
 
   html += '</section>';
   return html;
@@ -290,39 +250,56 @@ function dashCompact(amount, cur) {
   return s + amount.toFixed(0);
 }
 
-function dashOverdue(invoices) {
+function dashStatusTiles(invoices) {
   var now = new Date();
-  var overdue = [];
+  var overdueByCur = {};
+  var overdueCount = 0;
+  var unallocByCur = {};
+  var unallocCount = 0;
+
   invoices.forEach(function(inv) {
-    if (inv.status !== 'sent') return;
-    var d = new Date(inv.created_date);
-    var days = Math.floor((now - d) / 86400000);
-    if (days > 14) {
-      overdue.push({ invoice_id: inv.invoice_id, business_name: inv.business_name, total: inv.total, currency: inv.currency, days: days });
+    if (inv.status === 'void') return;
+    var cur = inv.currency || 'NZD';
+
+    if (inv.status === 'sent') {
+      var days = Math.floor((now - new Date(inv.created_date)) / 86400000);
+      if (days > 14) {
+        overdueByCur[cur] = (overdueByCur[cur] || 0) + inv.total;
+        overdueCount++;
+      }
+    }
+
+    if (!inv.allocated && inv.status !== 'void') {
+      unallocByCur[cur] = (unallocByCur[cur] || 0) + inv.total;
+      unallocCount++;
     }
   });
-  overdue.sort(function(a, b) { return b.days - a.days; });
 
-  var html = '<article><header><h3 style="margin:0;">Overdue Invoices</h3></header>';
+  var html = '<section class="flow-overview">';
 
-  if (overdue.length === 0) {
-    html += '<p class="muted">No overdue invoices. All sent invoices are within 14 days.</p>';
-  } else {
-    html += '<table class="data-table data-table--compact"><thead><tr>' +
-      '<th>Invoice</th><th>Business</th><th class="number">Amount</th><th>Age</th>' +
-      '</tr></thead><tbody>';
-    overdue.forEach(function(inv) {
-      html += '<tr>' +
-        '<td><a href="#invoices"><strong>' + escapeHtml(inv.invoice_id) + '</strong></a></td>' +
-        '<td>' + escapeHtml(inv.business_name) + '</td>' +
-        '<td class="number">' + formatCurrency(inv.total, inv.currency) + '</td>' +
-        '<td><span class="badge" style="background:var(--danger-bg);color:var(--danger);">' + inv.days + 'd</span></td>' +
-        '</tr>';
+  var overdueCurs = Object.keys(overdueByCur);
+  if (overdueCount > 0) {
+    overdueCurs.forEach(function(cur) {
+      html += dashTile('Overdue' + (overdueCurs.length > 1 ? ' (' + cur + ')' : ''),
+        formatCurrency(overdueByCur[cur], cur),
+        overdueCount + ' invoice' + (overdueCount !== 1 ? 's' : '') + ' past 14d', 'warn');
     });
-    html += '</tbody></table>';
+  } else {
+    html += dashTile('Overdue', '0', 'no overdue invoices', 'paid');
   }
 
-  html += '</article>';
+  var unallocCurs = Object.keys(unallocByCur);
+  if (unallocCount > 0) {
+    unallocCurs.forEach(function(cur) {
+      html += dashTile('Unallocated' + (unallocCurs.length > 1 ? ' (' + cur + ')' : ''),
+        formatCurrency(unallocByCur[cur], cur),
+        unallocCount + ' invoice' + (unallocCount !== 1 ? 's' : ''), 'outstanding');
+    });
+  } else {
+    html += dashTile('Unallocated', '0', 'all invoices allocated', 'paid');
+  }
+
+  html += '</section>';
   return html;
 }
 
