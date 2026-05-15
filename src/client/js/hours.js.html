@@ -6,7 +6,6 @@
 
 var _loadedTimeEntries = [];
 var _loadedExpenses = [];
-var _hoursPreset = 'week';
 var _editingEntryId = null;
 var _editingExpenseId = null;
 
@@ -43,7 +42,7 @@ function renderTimeEntryTab() {
     if (biz && biz.default_rate) defaultRate = biz.default_rate;
   }
 
-  var presetRange = datePreset(_hoursPreset);
+  var presetRange = datePreset('week');
   AppState.dateFrom = presetRange.from;
   AppState.dateTo = presetRange.to;
 
@@ -75,19 +74,9 @@ function renderTimeEntryTab() {
         '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All', selected: AppState.hoursBiz }) + '</label>' +
         '<button type="button" class="btn-subtle" onclick="filterTimeEntries()">Filter</button>' +
       '</div>' +
-      buildPresetPills('te-presets', [
-        { id: 'week', label: 'Past Week' },
-        { id: 'month', label: 'This Month' },
-        { id: 'ytd', label: 'YTD' }
-      ], _hoursPreset) +
+      '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: past week</p>' +
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
     '</section>';
-
-  document.getElementById('te-presets').addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-preset]');
-    if (!btn) return;
-    setHoursPreset(btn.dataset.preset);
-  });
 
   // Auto-fill rate and filter contracts/codes when business changes
   document.getElementById('te-business').addEventListener('change', function() {
@@ -117,18 +106,6 @@ function renderTimeEntryTab() {
   filterTimeEntries();
 }
 
-function setHoursPreset(preset) {
-  _hoursPreset = preset;
-  var range = datePreset(preset);
-  var fromEl = document.getElementById('te-filter-from');
-  var toEl = document.getElementById('te-filter-to');
-  if (fromEl) fromEl.value = range.from;
-  if (toEl) toEl.value = range.to;
-  document.querySelectorAll('#te-presets .period-pill').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.preset === preset);
-  });
-  filterTimeEntries();
-}
 
 function filterContractsByBusiness(bizId) {
   var contractEl = document.getElementById('te-contract');

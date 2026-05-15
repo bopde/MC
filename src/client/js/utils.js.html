@@ -305,6 +305,12 @@ function datePreset(type) {
       return { from: fmtDate(w), to: to };
     case 'month':
       return { from: y + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01', to: to };
+    case '3months':
+      var m3 = new Date(now); m3.setMonth(m3.getMonth() - 3);
+      return { from: fmtDate(m3), to: to };
+    case '6months':
+      var m6 = new Date(now); m6.setMonth(m6.getMonth() - 6);
+      return { from: fmtDate(m6), to: to };
     case 'ytd':
       return { from: y + '-01-01', to: to };
     default:

@@ -51,40 +51,20 @@ function showBudgetTab(tab) {
 
 // --- Budget Summary ---
 
-var _budgetPreset = 'ytd';
-
-function setBudgetPreset(preset) {
-  _budgetPreset = preset;
-  var range = datePreset(preset);
-  var fromEl = document.getElementById('budget-filter-from');
-  var toEl = document.getElementById('budget-filter-to');
-  if (fromEl) fromEl.value = range.from;
-  if (toEl) toEl.value = range.to;
-  document.querySelectorAll('#budget-presets .period-pill').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.preset === preset);
-  });
-  renderBudgetSummary();
-}
-
 function renderBudgetSummary() {
   var content = document.getElementById('budget-tab-content');
+
+  var range = datePreset('6months');
+  AppState.dateFrom = range.from;
+  AppState.dateTo = range.to;
 
   content.innerHTML =
     '<div class="filters">' +
       buildDateFilters('budget-filter-from', 'budget-filter-to', AppState.dateFrom, AppState.dateTo) +
       '<button type="button" class="btn-subtle" onclick="renderBudgetSummary()">Filter</button>' +
     '</div>' +
-    buildPresetPills('budget-presets', [
-      { id: 'month', label: 'This Month' },
-      { id: 'ytd', label: 'YTD' }
-    ], _budgetPreset) +
+    '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: last 6 months</p>' +
     '<div id="budget-summary-body" aria-busy="true">Loading...</div>';
-
-  document.getElementById('budget-presets').addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-preset]');
-    if (!btn) return;
-    setBudgetPreset(btn.dataset.preset);
-  });
 
   var fromEl = document.getElementById('budget-filter-from');
   var toEl = document.getElementById('budget-filter-to');

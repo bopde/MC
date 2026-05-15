@@ -4,6 +4,10 @@ var _dashData = null;
 var _dashBizFilter = '';
 
 function renderDashboardPage(container) {
+  var range = datePreset('6months');
+  AppState.dateFrom = range.from;
+  AppState.dateTo = range.to;
+
   var bizOptions = '<option value="">All Businesses</option>';
   (AppCache.businesses || []).forEach(function(b) {
     bizOptions += '<option value="' + escapeHtml(b.business_id) + '"' +
@@ -16,6 +20,7 @@ function renderDashboardPage(container) {
       '<label>Business <select id="dash-biz" onchange="loadDashboard()">' + bizOptions + '</select></label>' +
       '<button type="button" class="btn-subtle" onclick="loadDashboard()">Apply</button>' +
     '</div>' +
+    '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: last 6 months</p>' +
     '<div id="dash-content"><div aria-busy="true">Loading dashboard...</div></div>';
 
   loadDashboard();
