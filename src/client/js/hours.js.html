@@ -160,6 +160,11 @@ function filterContractsByBusiness(bizId) {
     }
     codeEl.innerHTML = buildCodeSelectOptions(AppCache.workCodes || []);
   });
+
+  if (contracts.length > 0) {
+    newEl.value = contracts[0].contract_id;
+    newEl.dispatchEvent(new Event('change'));
+  }
 }
 
 function buildCodeSelectOptions(codes) {
