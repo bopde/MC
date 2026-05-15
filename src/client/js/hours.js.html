@@ -43,6 +43,10 @@ function renderTimeEntryTab() {
     if (biz && biz.default_rate) defaultRate = biz.default_rate;
   }
 
+  var presetRange = datePreset(_hoursPreset);
+  AppState.dateFrom = presetRange.from;
+  AppState.dateTo = presetRange.to;
+
   content.innerHTML =
     '<form id="time-entry-form" onsubmit="submitTimeEntry(event)">' +
       '<div class="form-row">' +
