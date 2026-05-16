@@ -184,7 +184,7 @@ function renderCategoryBlock(cat) {
     '<table class="data-table data-table--compact">' +
       '<thead><tr>' +
         '<th>Invoice</th><th>Source</th><th class="number">Amount</th>' +
-        '<th>Status</th><th>Moved on</th><th></th>' +
+        '<th>Status</th><th>Moved on</th><th>Note</th><th></th>' +
       '</tr></thead><tbody>';
 
   cat.items.forEach(function(item) {
@@ -195,6 +195,7 @@ function renderCategoryBlock(cat) {
       '<td class="number">' + formatCurrency(item.amount) + '</td>' +
       '<td><span class="badge badge-' + status + '">' + status + '</span></td>' +
       '<td>' + (item.transfer_date ? formatDate(item.transfer_date) : '<span class="muted">—</span>') + '</td>' +
+      '<td>' + (item.notes ? escapeHtml(item.notes) : '<span class="muted">—</span>') + '</td>' +
       '<td class="actions">';
 
     if (!isWithheld) {
@@ -212,7 +213,10 @@ function renderCategoryBlock(cat) {
 }
 
 function markAllocationPaid(allocationId) {
-  serverCall('updateAllocationStatusFromClient', allocationId + '|paid|' + todayStr()).then(function() {
+  var note = prompt('Where did this go? (optional)');
+  if (note === null) return;
+  var params = allocationId + '|paid|' + todayStr() + '|' + (note || '');
+  serverCall('updateAllocationStatusFromClient', params).then(function() {
     showToast('Marked as paid');
     renderBudgetSummary();
   }).catch(function(err) { showToast(err.message, 'error'); });

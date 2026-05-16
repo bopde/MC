@@ -110,7 +110,7 @@ function allocateBudget(invoiceId, ruleId) {
 /**
  * Toggle allocation status between 'allocated' and 'paid'.
  */
-function updateAllocationStatus(allocationId, newStatus, transferDate) {
+function updateAllocationStatus(allocationId, newStatus, transferDate, notes) {
   newStatus = normaliseAllocationStatus(newStatus);
 
   var allocs = getAll('BudgetAllocations');
@@ -120,8 +120,10 @@ function updateAllocationStatus(allocationId, newStatus, transferDate) {
   alloc.status = newStatus;
   if (newStatus === 'paid') {
     alloc.transfer_date = transferDate || new Date().toISOString().split('T')[0];
+    if (notes) alloc.notes = notes;
   } else {
     alloc.transfer_date = '';
+    alloc.notes = '';
   }
   updateRow('BudgetAllocations', alloc._rowIndex, alloc);
   return alloc;
