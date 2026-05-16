@@ -33,7 +33,7 @@ function allocateBudgetFromClient(params) {
 function updateAllocationStatusFromClient(params) {
   var parts = String(params).split('|');
   if (parts.length < 2) throw new Error('Invalid parameters');
-  return updateAllocationStatus(parts[0], parts[1], parts[2] || null);
+  return updateAllocationStatus(parts[0], parts[1], parts[2] || null, parts[3] || null);
 }
 
 /**
