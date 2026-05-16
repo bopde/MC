@@ -119,7 +119,7 @@ function formatDate(dateStr) {
   var day = String(d.getDate()).padStart(2, '0');
   var mon = MONTHS_SHORT[d.getMonth()];
   var yr = String(d.getFullYear()).slice(-2);
-  return day + '.' + mon + '.' + yr;
+  return day + ' ' + mon + ' ' + yr;
 }
 
 /**
@@ -132,11 +132,11 @@ function formatMonth(monthStr) {
   if (m) {
     var yr = m[1].slice(-2);
     var mon = MONTHS_SHORT[parseInt(m[2], 10) - 1];
-    return mon + '.' + yr;
+    return mon + ' ' + yr;
   }
   var d = parseLocalDate(str);
   if (!isNaN(d.getTime())) {
-    return MONTHS_SHORT[d.getMonth()] + '.' + String(d.getFullYear()).slice(-2);
+    return MONTHS_SHORT[d.getMonth()] + ' ' + String(d.getFullYear()).slice(-2);
   }
   return str;
 }
