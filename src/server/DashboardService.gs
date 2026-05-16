@@ -22,14 +22,14 @@ function getDashboardData(params) {
   });
 
   var bizMap = {};
-  businesses.forEach(function(b) { bizMap[String(b.business_id)] = b; });
+  businesses.forEach(function(b) { bizMap[normalizeId(b.business_id)] = b; });
 
   var invoices = invoicesRaw.filter(function(inv) {
     if (!inRange(inv.created_date, from, to)) return false;
     if (businessId && !idsMatch(inv.business_id, businessId)) return false;
     return true;
   }).map(function(inv) {
-    var biz = bizMap[String(inv.business_id)];
+    var biz = bizMap[normalizeId(inv.business_id)];
     return {
       invoice_id: inv.invoice_id,
       business_id: inv.business_id,
@@ -68,13 +68,13 @@ function getDashboardData(params) {
   });
 
   var filteredInvoiceIds = {};
-  invoices.forEach(function(inv) { filteredInvoiceIds[String(inv.invoice_id)] = true; });
+  invoices.forEach(function(inv) { filteredInvoiceIds[normalizeId(inv.invoice_id)] = true; });
 
   var allocatedInvIds = {};
   var allocByCategory = {};
   allocations.forEach(function(a) {
-    if (!filteredInvoiceIds[String(a.invoice_id)]) return;
-    allocatedInvIds[String(a.invoice_id)] = true;
+    if (!filteredInvoiceIds[normalizeId(a.invoice_id)]) return;
+    allocatedInvIds[normalizeId(a.invoice_id)] = true;
     var cat = a.category;
     if (!allocByCategory[cat]) allocByCategory[cat] = { allocated: 0, paid: 0, outstanding: 0 };
     var amount = Number(a.amount) || 0;
@@ -85,7 +85,7 @@ function getDashboardData(params) {
   });
 
   invoices.forEach(function(inv) {
-    inv.allocated = !!allocatedInvIds[String(inv.invoice_id)];
+    inv.allocated = !!allocatedInvIds[normalizeId(inv.invoice_id)];
   });
 
   var budget = BUDGET_CATEGORIES.map(function(cat) {
@@ -150,7 +150,7 @@ function getDashboardData(params) {
     });
 
     var value = Number(c.value) || 0;
-    var biz = bizMap[String(cBizId)];
+    var biz = bizMap[normalizeId(cBizId)];
     var now = new Date();
     var totalDays = Math.max(1, (cTo - cFrom) / 86400000);
     var elapsedDays = Math.max(0, Math.min((now - cFrom) / 86400000, totalDays));

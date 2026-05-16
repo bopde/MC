@@ -320,10 +320,10 @@ function getInvoicesWithDetails(params) {
   }
   var businesses = getAll('Businesses');
   var bizMap = {};
-  businesses.forEach(function(b) { bizMap[String(b.business_id)] = b; });
+  businesses.forEach(function(b) { bizMap[normalizeId(b.business_id)] = b; });
 
   return invoices.map(function(inv) {
-    var biz = bizMap[String(inv.business_id)];
+    var biz = bizMap[normalizeId(inv.business_id)];
     inv.business_name = biz ? biz.name : 'Unknown';
     inv.currency = biz ? biz.currency : 'NZD';
     return inv;

@@ -149,6 +149,10 @@ function idsMatch(a, b) {
   return sa.replace(/^0+/, '') === sb.replace(/^0+/, '') && (sa !== '' && sb !== '');
 }
 
+function normalizeId(id) {
+  return String(id).replace(/^0+/, '') || '0';
+}
+
 /**
  * Find a row by ID (first column match).
  */
