@@ -211,7 +211,11 @@ function getBudgetSummary(params) {
     accWithheld: byCat['ACC Withheld'].paid,
     accToPayAllocated: byCat['ACC To Pay'].allocated,
     accToPayPaid: byCat['ACC To Pay'].paid,
-    accToPayOutstanding: byCat['ACC To Pay'].outstanding
+    accToPayOutstanding: byCat['ACC To Pay'].outstanding,
+    spendAllocated: byCat['Spend'].allocated, spendPaid: byCat['Spend'].paid, spendOutstanding: byCat['Spend'].outstanding,
+    saveAllocated: byCat['Save'].allocated, savePaid: byCat['Save'].paid, saveOutstanding: byCat['Save'].outstanding,
+    donateAllocated: byCat['Donate'].allocated, donatePaid: byCat['Donate'].paid, donateOutstanding: byCat['Donate'].outstanding,
+    investAllocated: byCat['Invest'].allocated, investPaid: byCat['Invest'].paid, investOutstanding: byCat['Invest'].outstanding
   };
   categories.forEach(function(c) {
     totals.allocated += c.allocated;
