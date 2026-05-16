@@ -114,8 +114,8 @@ function dashChart(timeEntries, bizMap) {
     return '<article><p class="muted">No hours data to chart for this period.</p></article>';
   }
 
-  var fromDate = new Date(AppState.dateFrom || new Date().getFullYear() + '-01-01');
-  var toDate = new Date(AppState.dateTo || new Date().getFullYear() + '-12-31');
+  var fromDate = parseLocalDate(AppState.dateFrom || new Date().getFullYear() + '-01-01');
+  var toDate = parseLocalDate(AppState.dateTo || new Date().getFullYear() + '-12-31');
   var months = [];
   var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
   while (d <= toDate) {

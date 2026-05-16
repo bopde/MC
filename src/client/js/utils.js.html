@@ -104,9 +104,17 @@ function formatCurrency(amount, currency) {
  * Format a date as "dd.mmm.yy" (e.g. "12.Apr.26").
  * Accepts Date objects, ISO strings, or "YYYY-MM-DD" strings.
  */
+function parseLocalDate(dateStr) {
+  if (dateStr instanceof Date) return dateStr;
+  var s = String(dateStr);
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  return new Date(dateStr);
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  var d = (dateStr instanceof Date) ? dateStr : new Date(dateStr);
+  var d = parseLocalDate(dateStr);
   if (isNaN(d.getTime())) return String(dateStr);
   var day = String(d.getDate()).padStart(2, '0');
   var mon = MONTHS_SHORT[d.getMonth()];
@@ -126,7 +134,7 @@ function formatMonth(monthStr) {
     var mon = MONTHS_SHORT[parseInt(m[2], 10) - 1];
     return mon + '.' + yr;
   }
-  var d = new Date(str);
+  var d = parseLocalDate(str);
   if (!isNaN(d.getTime())) {
     return MONTHS_SHORT[d.getMonth()] + '.' + String(d.getFullYear()).slice(-2);
   }
