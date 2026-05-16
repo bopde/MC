@@ -211,6 +211,17 @@ function renderCategoryBlock(cat) {
         '<th>Status</th><th>Moved on</th><th>Note</th><th></th>' +
       '</tr></thead><tbody>';
 
+  cat.items.sort(function(a, b) {
+    var sa = String(a.invoice_id), sb = String(b.invoice_id);
+    var ma = sa.match(/^(\d+)(.*)$/), mb = sb.match(/^(\d+)(.*)$/);
+    if (ma && mb) {
+      var na = parseInt(ma[1], 10), nb = parseInt(mb[1], 10);
+      if (na !== nb) return na - nb;
+      return ma[2].localeCompare(mb[2]);
+    }
+    return sa.localeCompare(sb);
+  });
+
   cat.items.forEach(function(item) {
     var status = item.status || 'allocated';
     html += '<tr>' +
