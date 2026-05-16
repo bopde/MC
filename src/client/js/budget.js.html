@@ -68,7 +68,7 @@ function renderBudgetSummary() {
   content.innerHTML =
     '<div class="filters">' +
       buildDateFilters('budget-filter-from', 'budget-filter-to', AppState.dateFrom, AppState.dateTo) +
-      '<button type="button" class="btn-subtle" onclick="renderBudgetSummary()">Filter</button>' +
+      '<button type="button" class="btn-subtle" onclick="renderBudgetSummary()">Apply</button>' +
     '</div>' +
     '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: last 6 months</p>' +
     '<div id="budget-summary-body" aria-busy="true">Loading...</div>';
