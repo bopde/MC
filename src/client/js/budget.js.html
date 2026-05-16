@@ -54,9 +54,16 @@ function showBudgetTab(tab) {
 function renderBudgetSummary() {
   var content = document.getElementById('budget-tab-content');
 
-  var range = datePreset('6months');
-  AppState.dateFrom = range.from;
-  AppState.dateTo = range.to;
+  var existingFrom = document.getElementById('budget-filter-from');
+  var existingTo = document.getElementById('budget-filter-to');
+  if (existingFrom && existingTo) {
+    AppState.dateFrom = existingFrom.value;
+    AppState.dateTo = existingTo.value;
+  } else {
+    var range = datePreset('6months');
+    AppState.dateFrom = range.from;
+    AppState.dateTo = range.to;
+  }
 
   content.innerHTML =
     '<div class="filters">' +
@@ -65,11 +72,6 @@ function renderBudgetSummary() {
     '</div>' +
     '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: last 6 months</p>' +
     '<div id="budget-summary-body" aria-busy="true">Loading...</div>';
-
-  var fromEl = document.getElementById('budget-filter-from');
-  var toEl = document.getElementById('budget-filter-to');
-  if (fromEl) AppState.dateFrom = fromEl.value;
-  if (toEl) AppState.dateTo = toEl.value;
 
   serverCall('getBudgetSummary', { dateFrom: AppState.dateFrom, dateTo: AppState.dateTo }).then(function(summary) {
     var body = document.getElementById('budget-summary-body');
