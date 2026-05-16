@@ -72,7 +72,7 @@ function renderTimeEntryTab() {
       '<div class="filters">' +
         buildDateFilters('te-filter-from', 'te-filter-to', AppState.dateFrom, AppState.dateTo) +
         '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All', selected: AppState.hoursBiz }) + '</label>' +
-        '<button type="button" class="btn-subtle" onclick="filterTimeEntries()">Filter</button>' +
+        '<button type="button" class="btn-subtle" onclick="filterTimeEntries()">Apply</button>' +
       '</div>' +
       '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: past week</p>' +
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
@@ -384,7 +384,7 @@ function renderExpenseTab() {
       '<div class="filters">' +
         buildDateFilters('exp-filter-from', 'exp-filter-to', AppState.dateFrom, AppState.dateTo) +
         '<label>Business ' + buildSelect('exp-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All' }) + '</label>' +
-        '<button type="button" class="btn-subtle" onclick="loadExpenses()">Filter</button>' +
+        '<button type="button" class="btn-subtle" onclick="loadExpenses()">Apply</button>' +
       '</div>' +
       '<div id="expenses-list" aria-busy="true">Loading...</div>' +
     '</section>';

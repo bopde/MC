@@ -114,8 +114,8 @@ function dashChart(timeEntries, bizMap) {
     return '<article><p class="muted">No hours data to chart for this period.</p></article>';
   }
 
-  var fromDate = new Date(AppState.dateFrom || new Date().getFullYear() + '-01-01');
-  var toDate = new Date(AppState.dateTo || new Date().getFullYear() + '-12-31');
+  var fromDate = parseLocalDate(AppState.dateFrom || new Date().getFullYear() + '-01-01');
+  var toDate = parseLocalDate(AppState.dateTo || new Date().getFullYear() + '-12-31');
   var months = [];
   var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
   while (d <= toDate) {
@@ -237,7 +237,7 @@ function dashStatusTiles(invoices) {
       }
     }
 
-    if (!inv.allocated && inv.status !== 'void') {
+    if (inv.status === 'paid' && !inv.allocated) {
       unallocByCur[cur] = (unallocByCur[cur] || 0) + inv.total;
       unallocCount++;
     }
@@ -253,7 +253,7 @@ function dashStatusTiles(invoices) {
         overdueCount + ' invoice' + (overdueCount !== 1 ? 's' : '') + ' past 14d', 'warn');
     });
   } else {
-    html += dashTile('Overdue', '0', 'no overdue invoices', 'paid');
+    html += dashTile('Overdue', '0', 'no invoices past 14 days', 'paid');
   }
 
   var unallocCurs = Object.keys(unallocByCur);
@@ -261,10 +261,10 @@ function dashStatusTiles(invoices) {
     unallocCurs.forEach(function(cur) {
       html += dashTile('Unallocated' + (unallocCurs.length > 1 ? ' (' + cur + ')' : ''),
         formatCurrency(unallocByCur[cur], cur),
-        unallocCount + ' invoice' + (unallocCount !== 1 ? 's' : ''), 'outstanding');
+        unallocCount + ' paid, not yet allocated', 'outstanding');
     });
   } else {
-    html += dashTile('Unallocated', '0', 'all invoices allocated', 'paid');
+    html += dashTile('Unallocated', '0', 'all paid invoices allocated', 'paid');
   }
 
   html += '</section>';

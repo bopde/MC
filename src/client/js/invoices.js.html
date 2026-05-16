@@ -46,7 +46,7 @@ function renderInvoiceList() {
   content.innerHTML =
     '<div class="filters">' +
       buildDateFilters('inv-filter-from', 'inv-filter-to', AppState.dateFrom, AppState.dateTo) +
-      '<button type="button" class="btn-subtle" onclick="renderInvoiceList()">Filter</button>' +
+      '<button type="button" class="btn-subtle" onclick="renderInvoiceList()">Apply</button>' +
     '</div>' +
     '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: last 3 months</p>' +
     '<div id="invoice-list-body" aria-busy="true">Loading invoices...</div>';

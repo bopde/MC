@@ -68,7 +68,7 @@ function renderBudgetSummary() {
   content.innerHTML =
     '<div class="filters">' +
       buildDateFilters('budget-filter-from', 'budget-filter-to', AppState.dateFrom, AppState.dateTo) +
-      '<button type="button" class="btn-subtle" onclick="renderBudgetSummary()">Filter</button>' +
+      '<button type="button" class="btn-subtle" onclick="renderBudgetSummary()">Apply</button>' +
     '</div>' +
     '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: last 6 months</p>' +
     '<div id="budget-summary-body" aria-busy="true">Loading...</div>';
@@ -90,22 +90,25 @@ function renderBudgetSummary() {
 
     var html = '';
 
-    // --- Money flow overview (top-level tiles) ---
-    html += '<section class="flow-overview">' +
-      '<div class="flow-tile flow-tile--total">' +
-        '<span class="flow-tile__label">Total allocated</span>' +
-        '<span class="flow-tile__value">' + formatCurrency(totals.allocated) + '</span>' +
-        '<span class="flow-tile__detail">across ' + categories.reduce(function(s, c){ return s + c.items.length; }, 0) + ' allocations</span>' +
-      '</div>' +
-      '<div class="flow-tile flow-tile--paid">' +
-        '<span class="flow-tile__label">Moved / paid</span>' +
-        '<span class="flow-tile__value">' + formatCurrency(totals.paid) + '</span>' +
-        '<span class="flow-tile__detail">' + pctOf(totals.paid, totals.allocated) + ' of total</span>' +
-      '</div>' +
-      '<div class="flow-tile flow-tile--outstanding">' +
-        '<span class="flow-tile__label">Still to move</span>' +
-        '<span class="flow-tile__value">' + formatCurrency(totals.outstanding) + '</span>' +
-        '<span class="flow-tile__detail">' + pctOf(totals.outstanding, totals.allocated) + ' of total</span>' +
+    // --- Overview tiles ---
+    html += '<section class="flow-group">' +
+      '<h3 class="flow-group__title">Overview</h3>' +
+      '<div class="flow-overview">' +
+        '<div class="flow-tile flow-tile--total">' +
+          '<span class="flow-tile__label">Total allocated</span>' +
+          '<span class="flow-tile__value">' + formatCurrency(totals.allocated) + '</span>' +
+          '<span class="flow-tile__detail">across ' + categories.reduce(function(s, c){ return s + c.items.length; }, 0) + ' allocations</span>' +
+        '</div>' +
+        '<div class="flow-tile flow-tile--paid">' +
+          '<span class="flow-tile__label">Moved / paid</span>' +
+          '<span class="flow-tile__value">' + formatCurrency(totals.paid) + '</span>' +
+          '<span class="flow-tile__detail">' + pctOf(totals.paid, totals.allocated) + ' of total</span>' +
+        '</div>' +
+        '<div class="flow-tile flow-tile--outstanding">' +
+          '<span class="flow-tile__label">Still to move</span>' +
+          '<span class="flow-tile__value">' + formatCurrency(totals.outstanding) + '</span>' +
+          '<span class="flow-tile__detail">' + pctOf(totals.outstanding, totals.allocated) + ' of total</span>' +
+        '</div>' +
       '</div>' +
     '</section>';
 
@@ -120,13 +123,32 @@ function renderBudgetSummary() {
       '</div>' +
     '</section>';
 
+    // --- Net distribution at a glance ---
+    html += '<section class="flow-group">' +
+      '<h3 class="flow-group__title">Net</h3>' +
+      '<div class="flow-grid">' +
+        tileSplit('Spend', totals.spendAllocated, totals.spendPaid, totals.spendOutstanding) +
+        tileSplit('Save', totals.saveAllocated, totals.savePaid, totals.saveOutstanding) +
+        tileSplit('Donate', totals.donateAllocated, totals.donatePaid, totals.donateOutstanding) +
+        tileSplit('Invest', totals.investAllocated, totals.investPaid, totals.investOutstanding) +
+      '</div>' +
+    '</section>';
+
     // --- Per-category detail ---
+    var categoryOrder = [
+      'Tax Withheld', 'Tax To Pay', 'ACC Withheld', 'ACC To Pay',
+      'Spend', 'Save', 'Donate', 'Invest'
+    ];
+    var catMap = {};
+    categories.forEach(function(cat) { catMap[cat.category] = cat; });
+
     html += '<section class="flow-group">' +
       '<h3 class="flow-group__title">By category</h3>' +
       '<div class="category-list">';
 
-    categories.forEach(function(cat) {
-      if (!cat.items || cat.items.length === 0) return;
+    categoryOrder.forEach(function(name) {
+      var cat = catMap[name];
+      if (!cat || !cat.items || cat.items.length === 0) return;
       html += renderCategoryBlock(cat);
     });
 
@@ -188,6 +210,17 @@ function renderCategoryBlock(cat) {
         '<th>Invoice</th><th>Source</th><th class="number">Amount</th>' +
         '<th>Status</th><th>Moved on</th><th>Note</th><th></th>' +
       '</tr></thead><tbody>';
+
+  cat.items.sort(function(a, b) {
+    var sa = String(a.invoice_id), sb = String(b.invoice_id);
+    var ma = sa.match(/^(\d+)(.*)$/), mb = sb.match(/^(\d+)(.*)$/);
+    if (ma && mb) {
+      var na = parseInt(ma[1], 10), nb = parseInt(mb[1], 10);
+      if (na !== nb) return na - nb;
+      return ma[2].localeCompare(mb[2]);
+    }
+    return sa.localeCompare(sb);
+  });
 
   cat.items.forEach(function(item) {
     var status = item.status || 'allocated';
