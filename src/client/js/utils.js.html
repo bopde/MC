@@ -308,6 +308,9 @@ function datePreset(type) {
   var y = now.getFullYear();
   var to = todayStr();
   switch (type) {
+    case 'yesterday':
+      var yd = new Date(now); yd.setDate(yd.getDate() - 1);
+      return { from: fmtDate(yd), to: to };
     case 'week':
       var w = new Date(now); w.setDate(w.getDate() - 6);
       return { from: fmtDate(w), to: to };
