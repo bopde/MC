@@ -54,8 +54,8 @@ function renderTimeEntryTab() {
         '<label>Date <input type="date" id="te-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Start <input type="time" id="te-start" required value="09:00"></label>' +
-        '<label>End <input type="time" id="te-end" required value="10:00"></label>' +
+        '<label>Start <input type="time" id="te-start" step="300" required value="09:00"></label>' +
+        '<label>End <input type="time" id="te-end" step="300" required value="10:00"></label>' +
       '</div>' +
       '<div class="form-row">' +
         '<label>Code ' + buildCodeSelect('te-code', codes, { required: true, selected: codeSelected, placeholder: codes.length === 1 ? false : 'Select...' }) + '</label>' +
