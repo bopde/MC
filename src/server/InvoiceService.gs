@@ -9,7 +9,8 @@
 function getUninvoicedItemsInternal(businessId, dateFrom, dateTo, contractId) {
   var from = new Date(dateFrom);
   var to = new Date(dateTo);
-  to.setHours(23, 59, 59);
+  from.setHours(0, 0, 0, 0);
+  to.setHours(23, 59, 59, 999);
   var conIdStr = contractId ? String(contractId) : '';
 
   var timeEntries = getAll('TimeEntries').filter(function(te) {

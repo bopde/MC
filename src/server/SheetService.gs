@@ -203,7 +203,8 @@ function getByDateRange(sheetName, dateColumn, dateFrom, dateTo) {
   var rows = getAll(sheetName);
   var from = dateFrom ? new Date(dateFrom) : null;
   var to = dateTo ? new Date(dateTo) : null;
-  if (to) to.setHours(23, 59, 59);
+  if (from) { from.setHours(0, 0, 0, 0); }
+  if (to) { to.setHours(23, 59, 59, 999); }
 
   return rows.filter(function(row) {
     var val = row[dateColumn];

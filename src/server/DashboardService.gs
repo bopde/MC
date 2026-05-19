@@ -9,7 +9,8 @@ function getDashboardData(params) {
   var businessId = params.businessId || '';
   var from = dateFrom ? new Date(dateFrom) : null;
   var to = dateTo ? new Date(dateTo) : null;
-  if (to) to.setHours(23, 59, 59);
+  if (from) { from.setHours(0, 0, 0, 0); }
+  if (to) { to.setHours(23, 59, 59, 999); }
 
   var invoicesRaw = getAll('Invoices');
   var businesses = getAll('Businesses');
@@ -133,7 +134,8 @@ function getDashboardData(params) {
     var cBizId = c.business_id;
     var cFrom = new Date(c.date_from);
     var cTo = new Date(c.date_to);
-    cTo.setHours(23, 59, 59);
+    cFrom.setHours(0, 0, 0, 0);
+    cTo.setHours(23, 59, 59, 999);
 
     var spent = 0, hrs = 0;
     timeEntriesRaw.forEach(function(te) {
@@ -187,7 +189,7 @@ function getDashboardData(params) {
 
 function inRange(dateVal, from, to) {
   if (!dateVal) return false;
-  var d = new Date(dateVal);
+  var d = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
   if (isNaN(d.getTime())) return false;
   if (from && d < from) return false;
   if (to && d > to) return false;
