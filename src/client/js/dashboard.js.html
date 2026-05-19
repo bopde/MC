@@ -2,6 +2,7 @@
 var _dashData = null;
 
 var _dashBizFilter = '';
+var _dashChartMode = 'month';
 
 function renderDashboardPage(container) {
   var range = datePreset('6months');
@@ -71,7 +72,7 @@ function renderDashContent() {
 
   var html = '';
   html += dashHours(timeEntries, bizMap);
-  html += dashChart(timeEntries, bizMap);
+  html += '<div id="dash-chart-area">' + dashChart(timeEntries, bizMap) + '</div>';
   html += dashContracts(contractProgress);
   if (data.budget && data.budget.length > 0) {
     html += dashBudget(data.budget);
@@ -94,15 +95,52 @@ function dashTile(label, value, detail, type) {
   '</div>';
 }
 
+function setChartMode(mode) {
+  _dashChartMode = mode;
+  var el = document.getElementById('dash-chart-area');
+  if (!el || !_dashData) return;
+  var bizMap = {};
+  if (AppCache.businesses) {
+    AppCache.businesses.forEach(function(b) { bizMap[normalizeId(b.business_id)] = b; });
+  }
+  el.innerHTML = dashChart(_dashData.timeEntries || [], bizMap);
+}
+
+function isoWeekKey(dateStr) {
+  var d = parseLocalDate(dateStr);
+  var day = d.getDay() || 7;
+  d.setDate(d.getDate() + 4 - day);
+  var yearStart = new Date(d.getFullYear(), 0, 1);
+  var week = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return d.getFullYear() + '-W' + String(week).padStart(2, '0');
+}
+
+function weekLabel(weekKey) {
+  var m = weekKey.match(/(\d{4})-W(\d{2})/);
+  if (!m) return weekKey;
+  var yr = parseInt(m[1], 10);
+  var wk = parseInt(m[2], 10);
+  var jan4 = new Date(yr, 0, 4);
+  var day1 = new Date(jan4);
+  day1.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1 + (wk - 1) * 7);
+  return String(day1.getDate()).padStart(2, '0') + ' ' + MONTHS_SHORT[day1.getMonth()];
+}
+
 function dashChart(timeEntries, bizMap) {
+  var mode = _dashChartMode;
   var byCur = {};
   timeEntries.forEach(function(te) {
     var biz = bizMap[normalizeId(te.business_id)];
     var cur = (biz && biz.currency) ? biz.currency : 'NZD';
     var dateStr = String(te.date || '');
-    var m = dateStr.match(/(\d{4})-(\d{1,2})/);
-    if (!m) return;
-    var key = m[1] + '-' + String(parseInt(m[2], 10)).padStart(2, '0');
+    var key;
+    if (mode === 'week') {
+      key = isoWeekKey(dateStr);
+    } else {
+      var m = dateStr.match(/(\d{4})-(\d{1,2})/);
+      if (!m) return;
+      key = m[1] + '-' + String(parseInt(m[2], 10)).padStart(2, '0');
+    }
     if (!byCur[cur]) byCur[cur] = {};
     if (!byCur[cur][key]) byCur[cur][key] = { hours: 0, income: 0 };
     byCur[cur][key].hours += te.hours;
@@ -116,27 +154,46 @@ function dashChart(timeEntries, bizMap) {
 
   var fromDate = parseLocalDate(AppState.dateFrom || new Date().getFullYear() + '-01-01');
   var toDate = parseLocalDate(AppState.dateTo || new Date().getFullYear() + '-12-31');
-  var months = [];
-  var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-  while (d <= toDate) {
-    months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
-    d.setMonth(d.getMonth() + 1);
+  var periods = [];
+  var periodLabels = [];
+  if (mode === 'week') {
+    var d = new Date(fromDate);
+    var day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1);
+    var seen = {};
+    while (d <= toDate) {
+      var wk = isoWeekKey(fmtDate(d));
+      if (!seen[wk]) { seen[wk] = true; periods.push(wk); periodLabels.push(weekLabel(wk)); }
+      d.setDate(d.getDate() + 7);
+    }
+  } else {
+    var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+    while (d <= toDate) {
+      var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      periods.push(key);
+      periodLabels.push(MONTHS_SHORT[d.getMonth()]);
+      d.setMonth(d.getMonth() + 1);
+    }
   }
+
+  var modeLabel = mode === 'week' ? 'Week' : 'Month';
+  var otherMode = mode === 'week' ? 'month' : 'week';
+  var otherLabel = mode === 'week' ? 'By Month' : 'By Week';
 
   var html = '';
   currencies.forEach(function(cur) {
-    var monthData = byCur[cur];
+    var periodData = byCur[cur];
     var maxH = 0, maxI = 0;
-    months.forEach(function(mo) {
-      var d = monthData[mo] || { hours: 0, income: 0 };
-      if (d.hours > maxH) maxH = d.hours;
-      if (d.income > maxI) maxI = d.income;
+    periods.forEach(function(p) {
+      var dd = periodData[p] || { hours: 0, income: 0 };
+      if (dd.hours > maxH) maxH = dd.hours;
+      if (dd.income > maxI) maxI = dd.income;
     });
     if (maxH === 0 && maxI === 0) return;
 
     var padL = 42, padR = 50, padTop = 24, padBot = 22;
-    var step = 60;
-    var chartW = Math.max(months.length * step, 120);
+    var step = mode === 'week' ? 52 : 60;
+    var chartW = Math.max(periods.length * step, 120);
     var chartH = 130;
     var totalW = padL + chartW + padR;
     var totalH = padTop + chartH + padBot;
@@ -146,48 +203,45 @@ function dashChart(timeEntries, bizMap) {
     function yIncome(v) { return maxI > 0 ? padTop + chartH - (v / maxI) * chartH : padTop + chartH; }
 
     var hoursPoints = [], incomePoints = [];
-    months.forEach(function(mo, idx) {
-      var dd = monthData[mo] || { hours: 0, income: 0 };
+    periods.forEach(function(p, idx) {
+      var dd = periodData[p] || { hours: 0, income: 0 };
       hoursPoints.push(xPos(idx) + ',' + yHours(dd.hours));
       incomePoints.push(xPos(idx) + ',' + yIncome(dd.income));
     });
 
     html += '<article class="dash-chart">' +
-      '<header><h3 style="margin:0;">Hours &amp; Income by Month' +
+      '<header style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+      '<div><h3 style="margin:0;">Hours &amp; Income by ' + modeLabel +
       (currencies.length > 1 ? ' <small class="muted">(' + escapeHtml(cur) + ')</small>' : '') +
       '</h3>' +
       '<div style="display:flex;gap:1rem;font-size:11px;margin-top:4px;">' +
       '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--sage)" stroke-width="2"/></svg> Hours</span>' +
       '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--ocean)" stroke-width="2"/></svg> Income</span>' +
-      '</div></header>' +
+      '</div></div>' +
+      '<button type="button" class="btn-subtle btn-small" onclick="setChartMode(\'' + otherMode + '\')">' + otherLabel + '</button>' +
+      '</header>' +
       '<div class="scroll-x">' +
       '<svg viewBox="0 0 ' + totalW + ' ' + totalH + '" class="revenue-chart" preserveAspectRatio="xMidYMid meet">';
 
-    // Grid lines
     for (var g = 0; g <= 4; g++) {
       var gy = padTop + (chartH / 4) * g;
       html += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (padL + chartW) + '" y2="' + gy + '" stroke="var(--rule)" stroke-width="0.5"/>';
     }
 
-    // Y-axis labels — hours (left)
     if (maxH > 0) {
       html += '<text x="' + (padL - 4) + '" y="' + (padTop + 4) + '" text-anchor="end" font-size="9" fill="var(--sage)">' + Math.round(maxH) + 'h</text>';
       html += '<text x="' + (padL - 4) + '" y="' + (padTop + chartH) + '" text-anchor="end" font-size="9" fill="var(--sage)">0</text>';
     }
-    // Y-axis labels — income (right)
     if (maxI > 0) {
       html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + 4) + '" text-anchor="start" font-size="9" fill="var(--ocean)">' + dashCompact(maxI, cur) + '</text>';
       html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + chartH) + '" text-anchor="start" font-size="9" fill="var(--ocean)">0</text>';
     }
 
-    // Hours line
     html += '<polyline points="' + hoursPoints.join(' ') + '" fill="none" stroke="var(--sage)" stroke-width="2" stroke-linejoin="round"/>';
-    // Income line
     html += '<polyline points="' + incomePoints.join(' ') + '" fill="none" stroke="var(--ocean)" stroke-width="2" stroke-linejoin="round"/>';
 
-    // Data points and labels
-    months.forEach(function(mo, idx) {
-      var dd = monthData[mo] || { hours: 0, income: 0 };
+    periods.forEach(function(p, idx) {
+      var dd = periodData[p] || { hours: 0, income: 0 };
       var cx = xPos(idx);
 
       if (dd.hours > 0) {
@@ -201,8 +255,7 @@ function dashChart(timeEntries, bizMap) {
         html += '<text x="' + cx + '" y="' + (iyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--ocean)">' + dashCompact(dd.income, cur) + '</text>';
       }
 
-      var moNum = parseInt(mo.split('-')[1], 10);
-      html += '<text x="' + cx + '" y="' + (totalH - 4) + '" text-anchor="middle" font-size="10" fill="var(--ocean)">' + MONTHS_SHORT[moNum - 1] + '</text>';
+      html += '<text x="' + cx + '" y="' + (totalH - 4) + '" text-anchor="middle" font-size="' + (mode === 'week' ? '8' : '10') + '" fill="var(--ocean)">' + periodLabels[idx] + '</text>';
     });
 
     html += '</svg></div></article>';
