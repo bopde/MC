@@ -187,12 +187,10 @@ function valueExists(sheetName, column, value) {
  * payload across the google.script.run bridge (critical at 10k+ rows).
  */
 function getByYear(sheetName, dateColumn, year) {
-  var yearNum = Number(year);
+  var prefix = String(year) + '-';
   return getAll(sheetName).filter(function(row) {
-    var val = row[dateColumn];
-    if (!val) return false;
-    var d = new Date(val);
-    return !isNaN(d.getTime()) && d.getFullYear() === yearNum;
+    var d = dateOnly(row[dateColumn]);
+    return d !== '' && d.indexOf(prefix) === 0;
   });
 }
 

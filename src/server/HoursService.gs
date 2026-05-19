@@ -210,8 +210,10 @@ function deleteExpense(expenseId) {
 }
 
 /**
- * Parse a date + time string into a Date object.
+ * Parse a date (YYYY-MM-DD) + time (HH:MM) into a local Date object.
  */
 function parseTime(dateStr, timeStr) {
-  return new Date(dateStr + 'T' + timeStr + ':00');
+  var dp = String(dateStr).split('-');
+  var tp = String(timeStr).split(':');
+  return new Date(+dp[0], +dp[1] - 1, +dp[2], +tp[0], +tp[1], 0);
 }

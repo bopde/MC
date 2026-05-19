@@ -283,7 +283,7 @@ function dashStatusTiles(invoices) {
     var cur = inv.currency || 'NZD';
 
     if (inv.status === 'sent') {
-      var days = Math.floor((now - new Date(inv.created_date)) / 86400000);
+      var days = Math.floor((now - parseLocalDate(inv.created_date)) / 86400000);
       if (days > 14) {
         overdueByCur[cur] = (overdueByCur[cur] || 0) + inv.total;
         overdueCount++;

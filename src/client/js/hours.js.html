@@ -212,7 +212,7 @@ function renderTimeEntriesTable(entries) {
   }
 
   entries.sort(function(a, b) {
-    var d = new Date(b.date) - new Date(a.date);
+    var d = parseLocalDate(b.date) - parseLocalDate(a.date);
     if (d !== 0) return d;
     return (b.time_start || '').localeCompare(a.time_start || '');
   });
@@ -418,7 +418,7 @@ function renderExpensesTable(expenses) {
     return;
   }
 
-  expenses.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  expenses.sort(function(a, b) { return parseLocalDate(b.date) - parseLocalDate(a.date); });
   var total = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
 
   var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +

@@ -58,7 +58,7 @@ function renderInvoiceList() {
       return;
     }
 
-    invoices.sort(function(a, b) { return new Date(b.created_date) - new Date(a.created_date); });
+    invoices.sort(function(a, b) { return parseLocalDate(b.created_date) - parseLocalDate(a.created_date); });
 
     var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
       '<th>Invoice #</th><th>Business</th><th>Period</th><th>Created</th>' +
