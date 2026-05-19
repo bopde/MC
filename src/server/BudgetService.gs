@@ -78,7 +78,7 @@ function allocateBudget(invoiceId, ruleId) {
     if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
     var total = Number(invoice.total) || 0;
-    var today = new Date().toISOString().split('T')[0];
+    var today = todayLocal();
     var calc = computeAllocationAmounts(rule, total);
 
     var allocations = [];
@@ -119,7 +119,7 @@ function updateAllocationStatus(allocationId, newStatus, transferDate, notes) {
 
   alloc.status = newStatus;
   if (newStatus === 'paid') {
-    alloc.transfer_date = transferDate || new Date().toISOString().split('T')[0];
+    alloc.transfer_date = transferDate || todayLocal();
     if (notes) alloc.notes = notes;
   } else {
     alloc.transfer_date = '';

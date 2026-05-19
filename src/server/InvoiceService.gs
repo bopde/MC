@@ -7,26 +7,24 @@
  * Called internally by generateInvoice. Client calls go through ClientWrappers.gs.
  */
 function getUninvoicedItemsInternal(businessId, dateFrom, dateTo, contractId) {
-  var from = new Date(dateFrom);
-  var to = new Date(dateTo);
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
+  var fromStr = dateOnly(dateFrom);
+  var toStr = dateOnly(dateTo);
   var conIdStr = contractId ? String(contractId) : '';
 
   var timeEntries = getAll('TimeEntries').filter(function(te) {
-    var d = new Date(te.date);
+    var d = dateOnly(te.date);
     if (!idsMatch(te.business_id, businessId)) return false;
     if (te.invoice_id && te.invoice_id !== '') return false;
-    if (d < from || d > to) return false;
+    if (d < fromStr || d > toStr) return false;
     if (conIdStr && !idsMatch(te.contract_id || '', conIdStr)) return false;
     return true;
   });
 
   var expenses = getAll('Expenses').filter(function(exp) {
-    var d = new Date(exp.date);
+    var d = dateOnly(exp.date);
     if (!idsMatch(exp.business_id, businessId)) return false;
     if (exp.invoice_id && exp.invoice_id !== '') return false;
-    if (d < from || d > to) return false;
+    if (d < fromStr || d > toStr) return false;
     return true;
   });
 
@@ -76,7 +74,7 @@ function generateInvoice(params) {
     business_id: params.businessId,
     date_from: params.dateFrom,
     date_to: params.dateTo,
-    created_date: new Date().toISOString().split('T')[0],
+    created_date: todayLocal(),
     include_gst: includeGst,
     gst_rate: gstRate,
     subtotal: subtotal,

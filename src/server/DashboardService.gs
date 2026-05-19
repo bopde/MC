@@ -7,10 +7,8 @@ function getDashboardData(params) {
   var dateFrom = params.dateFrom || '';
   var dateTo = params.dateTo || '';
   var businessId = params.businessId || '';
-  var from = dateFrom ? new Date(dateFrom) : null;
-  var to = dateTo ? new Date(dateTo) : null;
-  if (from) { from.setHours(0, 0, 0, 0); }
-  if (to) { to.setHours(23, 59, 59, 999); }
+  var fromStr = dateFrom ? dateOnly(dateFrom) : '';
+  var toStr = dateTo ? dateOnly(dateTo) : '';
 
   var invoicesRaw = getAll('Invoices');
   var businesses = getAll('Businesses');
@@ -26,7 +24,7 @@ function getDashboardData(params) {
   businesses.forEach(function(b) { bizMap[normalizeId(b.business_id)] = b; });
 
   var invoices = invoicesRaw.filter(function(inv) {
-    if (!inRange(inv.created_date, from, to)) return false;
+    if (!inRange(inv.created_date, fromStr, toStr)) return false;
     if (businessId && !idsMatch(inv.business_id, businessId)) return false;
     return true;
   }).map(function(inv) {
@@ -44,7 +42,7 @@ function getDashboardData(params) {
   });
 
   var timeEntries = timeEntriesRaw.filter(function(te) {
-    if (!inRange(te.date, from, to)) return false;
+    if (!inRange(te.date, fromStr, toStr)) return false;
     if (businessId && !idsMatch(te.business_id, businessId)) return false;
     return true;
   }).map(function(te) {
@@ -57,7 +55,7 @@ function getDashboardData(params) {
   });
 
   var expenses = expensesRaw.filter(function(exp) {
-    if (!inRange(exp.date, from, to)) return false;
+    if (!inRange(exp.date, fromStr, toStr)) return false;
     if (businessId && !idsMatch(exp.business_id, businessId)) return false;
     return true;
   }).map(function(exp) {
@@ -98,9 +96,8 @@ function getDashboardData(params) {
   summaries.forEach(function(s) {
     var mo = normaliseMonth(s.month);
     if (!mo) return;
-    if (to) {
-      var moDate = new Date(mo + '-28');
-      if (moDate > to) return;
+    if (toStr) {
+      if (mo + '-28' > toStr) return;
     }
     if (s.ending_balance === '' || s.ending_balance === null || s.ending_balance === undefined) return;
     var key = s.account_id;
@@ -132,10 +129,8 @@ function getDashboardData(params) {
   var contractProgress = contracts.map(function(c) {
     var contractId = c.contract_id;
     var cBizId = c.business_id;
-    var cFrom = new Date(c.date_from);
-    var cTo = new Date(c.date_to);
-    cFrom.setHours(0, 0, 0, 0);
-    cTo.setHours(23, 59, 59, 999);
+    var cFromStr = dateOnly(c.date_from);
+    var cToStr = dateOnly(c.date_to);
 
     var spent = 0, hrs = 0;
     timeEntriesRaw.forEach(function(te) {
@@ -143,8 +138,8 @@ function getDashboardData(params) {
         spent += Number(te.line_total) || 0;
         hrs += Number(te.hours) || 0;
       } else if (idsMatch(te.business_id, cBizId) && !te.contract_id) {
-        var d = new Date(te.date);
-        if (d >= cFrom && d <= cTo) {
+        var d = dateOnly(te.date);
+        if (d >= cFromStr && d <= cToStr) {
           spent += Number(te.line_total) || 0;
           hrs += Number(te.hours) || 0;
         }
@@ -154,6 +149,10 @@ function getDashboardData(params) {
     var value = Number(c.value) || 0;
     var biz = bizMap[normalizeId(cBizId)];
     var now = new Date();
+    var cFrom = new Date(now.getFullYear(), 0, 1);
+    var cTo = new Date(now.getFullYear(), 0, 1);
+    if (cFromStr) { var fp = cFromStr.split('-'); cFrom = new Date(+fp[0], +fp[1] - 1, +fp[2]); }
+    if (cToStr) { var tp = cToStr.split('-'); cTo = new Date(+tp[0], +tp[1] - 1, +tp[2]); }
     var totalDays = Math.max(1, (cTo - cFrom) / 86400000);
     var elapsedDays = Math.max(0, Math.min((now - cFrom) / 86400000, totalDays));
     var daysRemaining = Math.max(0, Math.ceil((cTo - now) / 86400000));
@@ -187,11 +186,10 @@ function getDashboardData(params) {
   };
 }
 
-function inRange(dateVal, from, to) {
-  if (!dateVal) return false;
-  var d = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
-  if (isNaN(d.getTime())) return false;
-  if (from && d < from) return false;
-  if (to && d > to) return false;
+function inRange(dateVal, fromStr, toStr) {
+  var d = dateOnly(dateVal);
+  if (!d) return false;
+  if (fromStr && d < fromStr) return false;
+  if (toStr && d > toStr) return false;
   return true;
 }

@@ -69,10 +69,8 @@ function getContractProgress() {
   return contracts.map(function(c) {
     var contractId = c.contract_id;
     var bizId = c.business_id;
-    var from = new Date(c.date_from);
-    var to = new Date(c.date_to);
-    from.setHours(0, 0, 0, 0);
-    to.setHours(23, 59, 59, 999);
+    var cFromStr = dateOnly(c.date_from);
+    var cToStr = dateOnly(c.date_to);
 
     var spent = 0;
     var hours = 0;
@@ -81,8 +79,8 @@ function getContractProgress() {
       var linked = idsMatch(te.contract_id, contractId);
       if (!linked) {
         if (!idsMatch(te.business_id, bizId)) return;
-        var d = new Date(te.date);
-        if (d < from || d > to) return;
+        var d = dateOnly(te.date);
+        if (d < cFromStr || d > cToStr) return;
         if (te.contract_id && !idsMatch(te.contract_id, contractId)) return;
       }
       spent += Number(te.line_total) || 0;
@@ -92,6 +90,10 @@ function getContractProgress() {
     var value = Number(c.value) || 0;
     var biz = bizMap[String(c.business_id)];
     var now = new Date();
+    var from = new Date(now.getFullYear(), 0, 1);
+    var to = new Date(now.getFullYear(), 0, 1);
+    if (cFromStr) { var fp = cFromStr.split('-'); from = new Date(+fp[0], +fp[1] - 1, +fp[2]); }
+    if (cToStr) { var tp = cToStr.split('-'); to = new Date(+tp[0], +tp[1] - 1, +tp[2]); }
     var totalDays = Math.max(1, (to - from) / 86400000);
     var elapsedDays = Math.max(0, Math.min((now - from) / 86400000, totalDays));
     var daysRemaining = Math.max(0, Math.ceil((to - now) / 86400000));

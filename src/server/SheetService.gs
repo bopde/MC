@@ -198,23 +198,48 @@ function getByYear(sheetName, dateColumn, year) {
 
 /**
  * Get rows filtered by a date column within a from/to range.
+ * Uses YYYY-MM-DD string comparison to avoid timezone issues.
  */
 function getByDateRange(sheetName, dateColumn, dateFrom, dateTo) {
   var rows = getAll(sheetName);
-  var from = dateFrom ? new Date(dateFrom) : null;
-  var to = dateTo ? new Date(dateTo) : null;
-  if (from) { from.setHours(0, 0, 0, 0); }
-  if (to) { to.setHours(23, 59, 59, 999); }
+  var fromStr = dateFrom ? dateOnly(dateFrom) : '';
+  var toStr = dateTo ? dateOnly(dateTo) : '';
 
   return rows.filter(function(row) {
-    var val = row[dateColumn];
-    if (!val) return false;
-    var d = new Date(val);
-    if (isNaN(d.getTime())) return false;
-    if (from && d < from) return false;
-    if (to && d > to) return false;
+    var d = dateOnly(row[dateColumn]);
+    if (!d) return false;
+    if (fromStr && d < fromStr) return false;
+    if (toStr && d > toStr) return false;
     return true;
   });
+}
+
+/**
+ * Today's date as YYYY-MM-DD in the script's local timezone (NZ).
+ */
+function todayLocal() {
+  var d = new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+/**
+ * Extract YYYY-MM-DD from a date value (string or Date).
+ * Handles "YYYY-MM-DDThh:mm:ss" and Date objects using local time.
+ */
+function dateOnly(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    var y = val.getFullYear();
+    var m = String(val.getMonth() + 1).padStart(2, '0');
+    var d = String(val.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  }
+  var s = String(val);
+  var match = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
 }
 
 /**
