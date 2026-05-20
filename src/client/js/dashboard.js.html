@@ -215,8 +215,8 @@ function dashChart(timeEntries, bizMap) {
       (currencies.length > 1 ? ' <small class="muted">(' + escapeHtml(cur) + ')</small>' : '') +
       '</h3>' +
       '<div style="display:flex;gap:1rem;font-size:11px;margin-top:4px;">' +
-      '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--sage)" stroke-width="2"/></svg> Hours</span>' +
-      '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--ocean)" stroke-width="2"/></svg> Income</span>' +
+      '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--chart-red)" stroke-width="2"/></svg> Hours</span>' +
+      '<span><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--chart-green)" stroke-width="2"/></svg> Income</span>' +
       '</div></div>' +
       '<button type="button" class="btn-subtle btn-small" onclick="setChartMode(\'' + otherMode + '\')">' + otherLabel + '</button>' +
       '</header>' +
@@ -229,16 +229,16 @@ function dashChart(timeEntries, bizMap) {
     }
 
     if (maxH > 0) {
-      html += '<text x="' + (padL - 4) + '" y="' + (padTop + 4) + '" text-anchor="end" font-size="9" fill="var(--sage)">' + Math.round(maxH) + 'h</text>';
-      html += '<text x="' + (padL - 4) + '" y="' + (padTop + chartH) + '" text-anchor="end" font-size="9" fill="var(--sage)">0</text>';
+      html += '<text x="' + (padL - 4) + '" y="' + (padTop + 4) + '" text-anchor="end" font-size="9" fill="var(--chart-red)">' + Math.round(maxH) + 'h</text>';
+      html += '<text x="' + (padL - 4) + '" y="' + (padTop + chartH) + '" text-anchor="end" font-size="9" fill="var(--chart-red)">0</text>';
     }
     if (maxI > 0) {
-      html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + 4) + '" text-anchor="start" font-size="9" fill="var(--ocean)">' + dashCompact(maxI, cur) + '</text>';
-      html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + chartH) + '" text-anchor="start" font-size="9" fill="var(--ocean)">0</text>';
+      html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + 4) + '" text-anchor="start" font-size="9" fill="var(--chart-green)">' + dashCompact(maxI, cur) + '</text>';
+      html += '<text x="' + (padL + chartW + 4) + '" y="' + (padTop + chartH) + '" text-anchor="start" font-size="9" fill="var(--chart-green)">0</text>';
     }
 
-    html += '<polyline points="' + hoursPoints.join(' ') + '" fill="none" stroke="var(--sage)" stroke-width="2" stroke-linejoin="round"/>';
-    html += '<polyline points="' + incomePoints.join(' ') + '" fill="none" stroke="var(--ocean)" stroke-width="2" stroke-linejoin="round"/>';
+    html += '<polyline points="' + hoursPoints.join(' ') + '" fill="none" stroke="var(--chart-red)" stroke-width="2" stroke-linejoin="round"/>';
+    html += '<polyline points="' + incomePoints.join(' ') + '" fill="none" stroke="var(--chart-green)" stroke-width="2" stroke-linejoin="round"/>';
 
     periods.forEach(function(p, idx) {
       var dd = periodData[p] || { hours: 0, income: 0 };
@@ -246,16 +246,16 @@ function dashChart(timeEntries, bizMap) {
 
       if (dd.hours > 0) {
         var hyy = yHours(dd.hours);
-        html += '<circle cx="' + cx + '" cy="' + hyy + '" r="3" fill="var(--sage)"/>';
-        html += '<text x="' + cx + '" y="' + (hyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--sage)">' + dd.hours.toFixed(1) + '</text>';
+        html += '<circle cx="' + cx + '" cy="' + hyy + '" r="3" fill="var(--chart-red)"/>';
+        html += '<text x="' + cx + '" y="' + (hyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--chart-red)">' + dd.hours.toFixed(1) + '</text>';
       }
       if (dd.income > 0) {
         var iyy = yIncome(dd.income);
-        html += '<circle cx="' + cx + '" cy="' + iyy + '" r="3" fill="var(--ocean)"/>';
-        html += '<text x="' + cx + '" y="' + (iyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--ocean)">' + dashCompact(dd.income, cur) + '</text>';
+        html += '<circle cx="' + cx + '" cy="' + iyy + '" r="3" fill="var(--chart-green)"/>';
+        html += '<text x="' + cx + '" y="' + (iyy - 7) + '" text-anchor="middle" font-size="8" fill="var(--chart-green)">' + dashCompact(dd.income, cur) + '</text>';
       }
 
-      html += '<text x="' + cx + '" y="' + (totalH - 4) + '" text-anchor="middle" font-size="' + (mode === 'week' ? '8' : '10') + '" fill="var(--ocean)">' + periodLabels[idx] + '</text>';
+      html += '<text x="' + cx + '" y="' + (totalH - 4) + '" text-anchor="middle" font-size="' + (mode === 'week' ? '8' : '10') + '" fill="var(--muted)">' + periodLabels[idx] + '</text>';
     });
 
     html += '</svg></div></article>';
