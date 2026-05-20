@@ -42,7 +42,7 @@ function renderTimeEntryTab() {
     if (biz && biz.default_rate) defaultRate = biz.default_rate;
   }
 
-  var presetRange = datePreset('week');
+  var presetRange = datePreset('yesterday');
   AppState.dateFrom = presetRange.from;
   AppState.dateTo = presetRange.to;
 
@@ -54,8 +54,8 @@ function renderTimeEntryTab() {
         '<label>Date <input type="date" id="te-date" required value="' + todayStr() + '"></label>' +
       '</div>' +
       '<div class="form-row">' +
-        '<label>Start <input type="time" id="te-start" required value="09:00"></label>' +
-        '<label>End <input type="time" id="te-end" required value="10:00"></label>' +
+        '<label>Start <input type="time" id="te-start" step="300" required value="09:00"></label>' +
+        '<label>End <input type="time" id="te-end" step="300" required value="10:00"></label>' +
       '</div>' +
       '<div class="form-row">' +
         '<label>Code ' + buildCodeSelect('te-code', codes, { required: true, selected: codeSelected, placeholder: codes.length === 1 ? false : 'Select...' }) + '</label>' +
@@ -74,7 +74,7 @@ function renderTimeEntryTab() {
         '<label>Business ' + buildSelect('te-filter-biz', businesses, 'business_id', 'name', { placeholder: 'All', selected: AppState.hoursBiz }) + '</label>' +
         '<button type="button" class="btn-subtle" onclick="filterTimeEntries()">Apply</button>' +
       '</div>' +
-      '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: past week</p>' +
+      '<p class="muted small" style="margin:-0.5rem 0 0.5rem;">Default: today &amp; yesterday</p>' +
       '<div id="time-entries-list" aria-busy="true">Loading...</div>' +
     '</section>';
 
@@ -212,7 +212,7 @@ function renderTimeEntriesTable(entries) {
   }
 
   entries.sort(function(a, b) {
-    var d = new Date(b.date) - new Date(a.date);
+    var d = parseLocalDate(b.date) - parseLocalDate(a.date);
     if (d !== 0) return d;
     return (b.time_start || '').localeCompare(a.time_start || '');
   });
@@ -418,7 +418,7 @@ function renderExpensesTable(expenses) {
     return;
   }
 
-  expenses.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  expenses.sort(function(a, b) { return parseLocalDate(b.date) - parseLocalDate(a.date); });
   var total = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
 
   var html = '<div class="scroll-x"><table class="data-table"><thead><tr>' +
