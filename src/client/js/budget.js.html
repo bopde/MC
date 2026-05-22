@@ -112,14 +112,15 @@ function renderBudgetSummary() {
       '</div>' +
     '</section>';
 
-    // --- Tax & ACC at a glance ---
+    // --- Tax, ACC & GST at a glance ---
     html += '<section class="flow-group">' +
-      '<h3 class="flow-group__title">Tax &amp; ACC</h3>' +
+      '<h3 class="flow-group__title">Tax, ACC &amp; GST</h3>' +
       '<div class="flow-grid">' +
         tileWithheldPaid('Tax withheld (at source)', totals.taxWithheld) +
         tileSplit('Tax to pay', totals.taxToPayAllocated, totals.taxToPayPaid, totals.taxToPayOutstanding) +
         tileWithheldPaid('ACC withheld (at source)', totals.accWithheld) +
         tileSplit('ACC to pay', totals.accToPayAllocated, totals.accToPayPaid, totals.accToPayOutstanding) +
+        tileSplit('GST collected', totals.gstAllocated, totals.gstPaid, totals.gstOutstanding) +
       '</div>' +
     '</section>';
 
@@ -137,7 +138,7 @@ function renderBudgetSummary() {
     // --- Per-category detail ---
     var categoryOrder = [
       'Tax Withheld', 'Tax To Pay', 'ACC Withheld', 'ACC To Pay',
-      'Spend', 'Save', 'Donate', 'Invest'
+      'GST Collected', 'Spend', 'Save', 'Donate', 'Invest'
     ];
     var catMap = {};
     categories.forEach(function(cat) { catMap[cat.category] = cat; });

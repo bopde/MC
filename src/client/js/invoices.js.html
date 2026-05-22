@@ -238,7 +238,7 @@ function renderInvoiceDetail(data) {
     '<table><tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
   if (includeGst) {
     var gstPct = Number(inv.gst_rate) || 0;
-    html += '<tr><td class="label">GST (' + (gstPct * 100).toFixed(0) + '%)</td>' +
+    html += '<tr><td class="label">GST (' + (gstPct * 100).toFixed(0) + '% on services)</td>' +
             '<td class="number">' + formatCurrency(inv.gst_amount, currency) + '</td></tr>';
   }
   html += '<tr class="grand-total"><td class="label">Total</td><td class="number">' + formatCurrency(inv.total, currency) + '</td></tr></table></div>';
@@ -466,14 +466,14 @@ function previewInvoice() {
       html += '</tbody></table>';
     }
 
-    var subtotal = items.timeEntries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0) +
-                   items.expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
-    var gst = includeGst ? Math.round(subtotal * gstRate * 100) / 100 : 0;
+    var timeTotal = items.timeEntries.reduce(function(s, e) { return s + (Number(e.line_total) || 0); }, 0);
+    var subtotal = timeTotal + items.expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+    var gst = includeGst ? Math.round(timeTotal * gstRate * 100) / 100 : 0;
 
     html += '<div class="preview-totals">' +
       '<strong>Subtotal:</strong> ' + formatCurrency(subtotal, currency);
     if (includeGst) {
-      html += ' &nbsp; <strong>GST (' + (gstRate * 100).toFixed(0) + '%):</strong> ' + formatCurrency(gst, currency);
+      html += ' &nbsp; <strong>GST (' + (gstRate * 100).toFixed(0) + '% on services):</strong> ' + formatCurrency(gst, currency);
     }
     html += ' &nbsp; <strong>Total:</strong> ' + formatCurrency(subtotal + gst, currency) + '</div>';
 
