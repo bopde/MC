@@ -253,6 +253,7 @@ function updateInvoice(params) {
     throw new Error('Cannot edit a ' + invoice.status + ' invoice.');
   }
 
+  if (params.created_date !== undefined && params.created_date !== '') invoice.created_date = params.created_date;
   if (params.description !== undefined) invoice.description = params.description;
   if (params.notes !== undefined) invoice.notes = params.notes;
   if (params.line_descriptions !== undefined) {

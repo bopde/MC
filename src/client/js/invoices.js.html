@@ -234,8 +234,17 @@ function renderInvoiceDetail(data) {
     html += '</tbody></table>';
   }
 
-  html += '<div class="invoice-totals">' +
-    '<table><tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
+  var servicesSubtotal = (data.codeGroups || []).reduce(function(s, g) { return s + g.totalAmount; }, 0);
+  var expensesSubtotal = (data.expenses || []).reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+
+  html += '<div class="invoice-totals"><table>';
+  if (servicesSubtotal > 0) {
+    html += '<tr><td class="label">Services Subtotal</td><td class="number">' + formatCurrency(servicesSubtotal, currency) + '</td></tr>';
+  }
+  if (expensesSubtotal > 0) {
+    html += '<tr><td class="label">Expenses Subtotal</td><td class="number">' + formatCurrency(expensesSubtotal, currency) + '</td></tr>';
+  }
+  html += '<tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
   if (includeGst) {
     var gstPct = Number(inv.gst_rate) || 0;
     html += '<tr><td class="label">GST (' + (gstPct * 100).toFixed(0) + '%)</td>' +
@@ -294,6 +303,9 @@ function editInvoice(invoiceId) {
       '<article>' +
         '<h3>Edit Invoice ' + escapeHtml(invoiceId) + '</h3>' +
         '<form id="edit-invoice-form" onsubmit="submitInvoiceEdit(event, \'' + invoiceId + '\')">' +
+          '<label>Invoice Date' +
+            '<input type="date" id="edit-inv-date" value="' + (inv.created_date || '') + '">' +
+          '</label>' +
           '<label>Description' +
             '<input type="text" id="edit-inv-desc" value="' + escapeHtml(inv.description || '') + '">' +
           '</label>' +
@@ -345,6 +357,7 @@ function submitInvoiceEdit(event, invoiceId) {
 
   var data = {
     invoice_id: invoiceId,
+    created_date: document.getElementById('edit-inv-date').value,
     description: document.getElementById('edit-inv-desc').value,
     notes: document.getElementById('edit-inv-notes').value,
     include_gst: document.getElementById('edit-inv-gst').checked,
