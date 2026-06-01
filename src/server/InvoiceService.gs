@@ -66,15 +66,15 @@ function generateInvoice(params) {
   var gstAmount = includeGst ? Math.round(subtotal * gstRate * 100) / 100 : 0;
   var total = subtotal + gstAmount;
 
-  // Generate MMYY invoice ID
-  var invoiceId = generateInvoiceId();
+  // Generate MMYY invoice ID based on the period end date
+  var invoiceId = generateInvoiceId(params.dateTo);
 
   var invoice = appendRow('Invoices', {
     invoice_id: invoiceId,
     business_id: params.businessId,
     date_from: params.dateFrom,
     date_to: params.dateTo,
-    created_date: todayLocal(),
+    created_date: params.dateTo,
     include_gst: includeGst,
     gst_rate: gstRate,
     subtotal: subtotal,
@@ -324,16 +324,17 @@ function getInvoicesWithDetails(params) {
 }
 
 /**
- * Generate invoice ID in MMYY format (e.g. "0426" for April 2026).
- * Subsequent invoices in the same month get a letter suffix: 0426a, 0426b, etc.
+ * Generate invoice ID in MMYY format based on the period end date.
+ * E.g. dateTo of "2026-05-31" → "0526".
+ * Subsequent invoices in the same month get a letter suffix: 0526a, 0526b, etc.
  */
-function generateInvoiceId() {
+function generateInvoiceId(dateTo) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var now = new Date();
-    var mm = String(now.getMonth() + 1).padStart(2, '0');
-    var yy = String(now.getFullYear()).slice(-2);
+    var parts = String(dateTo).split('-');
+    var mm = parts[1];
+    var yy = parts[0].slice(-2);
     var base = mm + yy;
 
     var invoices = getAll('Invoices');
