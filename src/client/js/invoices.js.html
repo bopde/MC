@@ -234,14 +234,18 @@ function renderInvoiceDetail(data) {
     html += '</tbody></table>';
   }
 
-  var servicesSubtotal = (data.codeGroups || []).reduce(function(s, g) { return s + g.totalAmount; }, 0);
-  var expensesSubtotal = (data.expenses || []).reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+  var servicesSubtotal = data.timeSubtotal != null ? data.timeSubtotal
+    : (data.codeGroups || []).reduce(function(s, g) { return s + g.totalAmount; }, 0);
+  var expensesSubtotal = data.expenseSubtotal != null ? data.expenseSubtotal
+    : (data.expenses || []).reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+  var hasTimeEntries = data.timeEntryCount > 0 || (data.codeGroups && data.codeGroups.length > 0);
+  var hasExpenses = data.expenses && data.expenses.length > 0;
 
   html += '<div class="invoice-totals"><table>';
-  if (data.codeGroups && data.codeGroups.length > 0) {
+  if (hasTimeEntries) {
     html += '<tr><td class="label">Services Subtotal</td><td class="number">' + formatCurrency(servicesSubtotal, currency) + '</td></tr>';
   }
-  if (data.expenses && data.expenses.length > 0) {
+  if (hasExpenses) {
     html += '<tr><td class="label">Expenses Subtotal</td><td class="number">' + formatCurrency(expensesSubtotal, currency) + '</td></tr>';
   }
   html += '<tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';

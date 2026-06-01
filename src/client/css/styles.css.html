@@ -637,7 +637,7 @@
   /* ---- Print ---- */
   @page { margin: 1.5cm 1.5cm 1cm; }
   @media print {
-    body > nav, footer, .no-print, .tab-bar, .form-actions, .invoice-toolbar { display: none !important; }
+    body > nav, footer, .no-print, .tab-bar, .form-actions, .invoice-toolbar, .page-header { display: none !important; }
     body, html { background: white !important; padding: 0 !important; margin: 0 !important; font-size: 12pt !important; }
     main, main.container { background: white !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
     .invoice-print { border: none !important; box-shadow: none !important; padding: 0 !important; max-width: none !important; }
@@ -649,7 +649,7 @@
     .form-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important; }
     table { font-size: 10pt !important; }
     a[href]::after { content: none !important; }
-    .muted, .invoice-footer, .invoice-footer .label { color: #333 !important; }
+    .muted, .invoice-footer, .invoice-footer .label { color: #111 !important; }
   }
 
   /* ---- Mobile ---- */
