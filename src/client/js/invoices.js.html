@@ -237,13 +237,9 @@ function renderInvoiceDetail(data) {
   var servicesSubtotal = (data.codeGroups || []).reduce(function(s, g) { return s + g.totalAmount; }, 0);
   var expensesSubtotal = (data.expenses || []).reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
 
-  html += '<div class="invoice-totals"><table>';
-  if (servicesSubtotal > 0) {
-    html += '<tr><td class="label">Services Subtotal</td><td class="number">' + formatCurrency(servicesSubtotal, currency) + '</td></tr>';
-  }
-  if (expensesSubtotal > 0) {
-    html += '<tr><td class="label">Expenses Subtotal</td><td class="number">' + formatCurrency(expensesSubtotal, currency) + '</td></tr>';
-  }
+  html += '<div class="invoice-totals"><table>' +
+    '<tr><td class="label">Services Subtotal</td><td class="number">' + formatCurrency(servicesSubtotal, currency) + '</td></tr>' +
+    '<tr><td class="label">Expenses Subtotal</td><td class="number">' + formatCurrency(expensesSubtotal, currency) + '</td></tr>';
   html += '<tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
   if (includeGst) {
     var gstPct = Number(inv.gst_rate) || 0;
