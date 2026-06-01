@@ -121,15 +121,12 @@ function getInvoiceDetails(invoiceId) {
   var business = findById('Businesses', invoice.business_id);
 
   var invIdStr = String(invoiceId);
-  var invIdNum = invIdStr.replace(/^0+/, '');
   var timeEntries = getAll('TimeEntries').filter(function(te) {
-    var tid = String(te.invoice_id || '');
-    return tid === invIdStr || (tid !== '' && tid === invIdNum);
+    return idsMatch(te.invoice_id, invIdStr);
   });
 
   var expenses = getAll('Expenses').filter(function(exp) {
-    var eid = String(exp.invoice_id || '');
-    return eid === invIdStr || (eid !== '' && eid === invIdNum);
+    return idsMatch(exp.invoice_id, invIdStr);
   });
 
   // Parse stored line descriptions
@@ -163,7 +160,7 @@ function getInvoiceDetails(invoiceId) {
     invoice: invoice,
     business: business,
     myDetails: myDetails,
-    codeGroups: Object.values(codeGroups),
+    codeGroups: Object.keys(codeGroups).map(function(k) { return codeGroups[k]; }),
     expenses: expenses,
     allocations: allocations
   };
@@ -203,10 +200,8 @@ function updateInvoiceStatus(invoiceId, newStatus) {
  */
 function voidInvoice(invoice) {
   var invIdStr = String(invoice.invoice_id);
-  var invIdNum = invIdStr.replace(/^0+/, '');
   var allocations = getAll('BudgetAllocations').filter(function(a) {
-    var aid = String(a.invoice_id || '');
-    return aid === invIdStr || (aid !== '' && aid === invIdNum);
+    return idsMatch(a.invoice_id, invIdStr);
   });
   if (allocations.length > 0) {
     throw new Error('Cannot void — this invoice has budget allocations. Remove them first.');
@@ -220,8 +215,7 @@ function voidInvoice(invoice) {
     var teInvCol = getColumnIndex(teSheet, 'invoice_id');
     var teAll = getAll('TimeEntries');
     teAll.forEach(function(te) {
-      var tid = String(te.invoice_id || '');
-      if (tid === invIdStr || (tid !== '' && tid === invIdNum)) {
+      if (idsMatch(te.invoice_id, invIdStr)) {
         teSheet.getRange(te._rowIndex, teInvCol).setValue('');
       }
     });
@@ -233,8 +227,7 @@ function voidInvoice(invoice) {
     var expInvCol = getColumnIndex(expSheet, 'invoice_id');
     var expAll = getAll('Expenses');
     expAll.forEach(function(exp) {
-      var eid = String(exp.invoice_id || '');
-      if (eid === invIdStr || (eid !== '' && eid === invIdNum)) {
+      if (idsMatch(exp.invoice_id, invIdStr)) {
         expSheet.getRange(exp._rowIndex, expInvCol).setValue('');
       }
     });
