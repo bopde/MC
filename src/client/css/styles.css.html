@@ -514,8 +514,8 @@
     font-family: var(--font-display); color: var(--ocean); padding-top: 0.5rem;
   }
 
-  .invoice-footer { border-top: 1px solid var(--rule-2); padding-top: 0.6rem; margin-top: 0.75rem; font-size: 0.82rem; color: var(--muted); }
-  .invoice-footer .label { color: var(--ocean); font-weight: 500; }
+  .invoice-footer { border-top: 1px solid var(--rule-2); padding-top: 0.6rem; margin-top: 0.75rem; font-size: 0.82rem; }
+  .invoice-footer .label { color: var(--muted); font-weight: 500; }
   .invoice-notes { margin-top: 0.75rem; padding: 0.7rem 0.85rem; background: var(--cream); font-size: 0.85rem; border-radius: 2px; }
 
   /* ---- Collapsible add-forms in Settings ---- */
@@ -649,7 +649,9 @@
     .form-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important; }
     table { font-size: 10pt !important; }
     a[href]::after { content: none !important; }
-    .muted, .invoice-footer, .invoice-footer .label { color: #111 !important; }
+    .muted, .invoice-footer .label { color: #555 !important; }
+    .invoice-footer { color: #000 !important; }
+    .page-header { display: none !important; }
   }
 
   /* ---- Mobile ---- */

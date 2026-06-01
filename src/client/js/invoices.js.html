@@ -242,10 +242,8 @@ function renderInvoiceDetail(data) {
   var hasExpenses = data.expenses && data.expenses.length > 0;
 
   html += '<div class="invoice-totals"><table>';
-  if (hasTimeEntries) {
+  if (hasTimeEntries && hasExpenses) {
     html += '<tr><td class="label">Services Subtotal</td><td class="number">' + formatCurrency(servicesSubtotal, currency) + '</td></tr>';
-  }
-  if (hasExpenses) {
     html += '<tr><td class="label">Expenses Subtotal</td><td class="number">' + formatCurrency(expensesSubtotal, currency) + '</td></tr>';
   }
   html += '<tr><td class="label">Subtotal</td><td class="number">' + formatCurrency(inv.subtotal, currency) + '</td></tr>';
