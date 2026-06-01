@@ -102,12 +102,10 @@ function appendRow(sheetName, data) {
     return sanitiseCell(data[h] !== undefined ? data[h] : '');
   });
 
-  sheet.appendRow(row);
-  var newRow = sheet.getLastRow();
-  data._rowIndex = newRow;
-
-  // Force text format on the ID column to preserve leading zeros
+  var newRow = sheet.getLastRow() + 1;
   sheet.getRange(newRow, 1).setNumberFormat('@');
+  sheet.getRange(newRow, 1, 1, row.length).setValues([row]);
+  data._rowIndex = newRow;
 
   return data;
 }
