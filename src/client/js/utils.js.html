@@ -351,10 +351,23 @@ function buildPresetPills(containerId, presets, activeName) {
  */
 function formatTime(val) {
   if (!val) return '';
-  var str = String(val);
-  if (/^\d{1,2}:\d{2}$/.test(str)) return str;
+  var str = String(val).trim();
+  if (/^\d{1,2}:\d{2}$/.test(str)) {
+    return str.length === 4 ? '0' + str : str;
+  }
   var m = str.match(/T(\d{2}:\d{2})/);
   if (m) return m[1];
+  var ampm = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+  if (ampm) {
+    var h = parseInt(ampm[1], 10);
+    var min = ampm[2];
+    var period = ampm[3].toUpperCase();
+    if (period === 'AM' && h === 12) h = 0;
+    else if (period === 'PM' && h !== 12) h += 12;
+    return String(h).padStart(2, '0') + ':' + min;
+  }
+  var hms = str.match(/^(\d{1,2}):(\d{2}):\d{2}$/);
+  if (hms) return hms[1].padStart(2, '0') + ':' + hms[2];
   if (val instanceof Date && !isNaN(val.getTime())) {
     return String(val.getHours()).padStart(2, '0') + ':' + String(val.getMinutes()).padStart(2, '0');
   }
