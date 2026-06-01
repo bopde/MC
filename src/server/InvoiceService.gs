@@ -156,11 +156,22 @@ function getInvoiceDetails(invoiceId) {
   // Get "my details" for the invoice header
   var myDetails = getMyDetails();
 
+  var codeGroupList = Object.keys(codeGroups).map(function(k) {
+    var g = codeGroups[k];
+    return { code: g.code, description: g.description, totalHours: g.totalHours, totalAmount: g.totalAmount, rate: g.rate };
+  });
+
+  var timeSubtotal = codeGroupList.reduce(function(s, g) { return s + g.totalAmount; }, 0);
+  var expenseSubtotal = expenses.reduce(function(s, e) { return s + (Number(e.amount) || 0); }, 0);
+
   return {
     invoice: invoice,
     business: business,
     myDetails: myDetails,
-    codeGroups: Object.keys(codeGroups).map(function(k) { return codeGroups[k]; }),
+    codeGroups: codeGroupList,
+    timeEntryCount: timeEntries.length,
+    timeSubtotal: timeSubtotal,
+    expenseSubtotal: expenseSubtotal,
     expenses: expenses,
     allocations: allocations
   };
