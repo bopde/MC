@@ -95,6 +95,9 @@ function renderBusinessSettings() {
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
   serverCall('getAllBusinesses').then(function(businesses) {
+    var currencyOptions = '<option value="NZD">NZD</option><option value="USD">USD</option>' +
+      '<option value="AUD">AUD</option><option value="GBP">GBP</option><option value="EUR">EUR</option>';
+
     var html =
       '<details class="add-form-panel"><summary>+ Add New Business</summary><div>' +
       '<form id="add-biz-form" onsubmit="submitBusiness(event)">' +
@@ -105,38 +108,33 @@ function renderBusinessSettings() {
         '<div class="form-row">' +
           '<label>Email <input type="email" id="biz-email"></label>' +
           '<label>Default Rate (per hr) <input type="number" id="biz-rate" step="0.01"></label>' +
-          '<label>Currency <select id="biz-currency">' +
-            '<option value="NZD">NZD</option>' +
-            '<option value="USD">USD</option>' +
-            '<option value="AUD">AUD</option>' +
-            '<option value="GBP">GBP</option>' +
-            '<option value="EUR">EUR</option>' +
-          '</select></label>' +
+          '<label>Currency <select id="biz-currency">' + currencyOptions + '</select></label>' +
         '</div>' +
         '<label>Address <textarea id="biz-address" rows="2"></textarea></label>' +
         '<div class="form-actions"><button type="submit">Add Business</button></div>' +
-      '</form></div></details>';
+      '</form></div></details>' +
+      '<div id="biz-edit-area"></div>';
 
     if (businesses.length > 0) {
       html += '<table><thead><tr>' +
-        '<th>ID</th><th>Name</th><th>Contact</th><th>Email</th>' +
-        '<th class="number">Rate</th><th>Currency</th><th>Active</th>' +
+        '<th>Name</th><th>Contact</th><th>Email</th>' +
+        '<th class="number">Rate</th><th>Currency</th><th></th>' +
         '</tr></thead><tbody>';
 
       businesses.forEach(function(b) {
         var isActive = b.active === true || b.active === 'TRUE' || b.active === 'true';
         var cur = b.currency || 'NZD';
         html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
-          '<td>' + escapeHtml(b.business_id) + '</td>' +
-          '<td>' + escapeHtml(b.name) + '</td>' +
+          '<td><strong>' + escapeHtml(b.name) + '</strong></td>' +
           '<td>' + escapeHtml(b.contact_name) + '</td>' +
           '<td>' + escapeHtml(b.email) + '</td>' +
           '<td class="number">' + formatCurrency(b.default_rate, cur) + '</td>' +
           '<td>' + escapeHtml(cur) + '</td>' +
-          '<td>' +
+          '<td class="actions">' +
+            '<button type="button" class="btn-small btn-subtle" onclick="editBusiness(\'' + escapeHtml(b.business_id) + '\')">Edit</button> ' +
             (isActive
-              ? '<button type="button" class="outline secondary" onclick="toggleBusiness(' + b._rowIndex + ', false)">Deactivate</button>'
-              : '<button type="button" class="outline" onclick="toggleBusiness(' + b._rowIndex + ', true)">Activate</button>') +
+              ? '<button type="button" class="btn-small btn-subtle" onclick="toggleBusiness(' + b._rowIndex + ', false)">Deactivate</button>'
+              : '<button type="button" class="btn-small" onclick="toggleBusiness(' + b._rowIndex + ', true)">Activate</button>') +
           '</td>' +
           '</tr>';
       });
@@ -149,6 +147,65 @@ function renderBusinessSettings() {
   }).catch(function(err) {
     content.innerHTML = '<p>Error: ' + escapeHtml(err.message) + '</p>';
   });
+}
+
+function editBusiness(bizId) {
+  var businesses = AppCache.businesses || [];
+  var all = null;
+  serverCall('getAllBusinesses').then(function(bs) {
+    all = bs;
+    var b = bs.find(function(x) { return idsMatch(x.business_id, bizId); });
+    if (!b) { showToast('Business not found', 'error'); return; }
+
+    var cur = b.currency || 'NZD';
+    var currencies = ['NZD','USD','AUD','GBP','EUR'];
+    var curOpts = currencies.map(function(c) {
+      return '<option value="' + c + '"' + (c === cur ? ' selected' : '') + '>' + c + '</option>';
+    }).join('');
+
+    var area = document.getElementById('biz-edit-area');
+    area.innerHTML =
+      '<article style="margin:1rem 0;">' +
+        '<header><h4>Edit: ' + escapeHtml(b.name) + '</h4></header>' +
+        '<form onsubmit="saveBusiness(event, \'' + escapeHtml(b.business_id) + '\')">' +
+          '<div class="form-row">' +
+            '<label>Name <input type="text" id="ebiz-name" required value="' + escapeHtml(b.name) + '"></label>' +
+            '<label>Contact Name <input type="text" id="ebiz-contact" value="' + escapeHtml(b.contact_name || '') + '"></label>' +
+          '</div>' +
+          '<div class="form-row">' +
+            '<label>Email <input type="email" id="ebiz-email" value="' + escapeHtml(b.email || '') + '"></label>' +
+            '<label>Default Rate <input type="number" id="ebiz-rate" step="0.01" value="' + (b.default_rate || '') + '"></label>' +
+            '<label>Currency <select id="ebiz-currency">' + curOpts + '</select></label>' +
+          '</div>' +
+          '<label>Address <textarea id="ebiz-address" rows="2">' + escapeHtml(b.address || '') + '</textarea></label>' +
+          '<div class="form-actions">' +
+            '<button type="submit">Save</button>' +
+            '<button type="button" class="btn-subtle" onclick="document.getElementById(\'biz-edit-area\').innerHTML=\'\'">Cancel</button>' +
+          '</div>' +
+        '</form>' +
+      '</article>';
+    area.scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
+function saveBusiness(event, bizId) {
+  event.preventDefault();
+  var data = {
+    business_id: bizId,
+    name: document.getElementById('ebiz-name').value,
+    contact_name: document.getElementById('ebiz-contact').value,
+    email: document.getElementById('ebiz-email').value,
+    default_rate: Number(document.getElementById('ebiz-rate').value) || 0,
+    currency: document.getElementById('ebiz-currency').value || 'NZD',
+    address: document.getElementById('ebiz-address').value
+  };
+
+  serverCall('updateBusiness', data).then(function() {
+    showToast('Business updated!');
+    document.getElementById('biz-edit-area').innerHTML = '';
+    refreshReferenceData();
+    renderBusinessSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
 }
 
 function submitBusiness(event) {
@@ -185,30 +242,50 @@ function renderCodeSettings() {
   var content = document.getElementById('settings-tab-content');
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
-  serverCall('getAllClient', 'WorkCodes').then(function(codes) {
+  Promise.all([
+    serverCall('getAllClient', 'WorkCodes'),
+    serverCall('getAllClient', 'Contracts')
+  ]).then(function(results) {
+    var codes = results[0] || [];
+    var contracts = results[1] || [];
+
+    var contractOpts = contracts.map(function(c) {
+      return { id: c.contract_id, label: c.name };
+    });
+
     var html =
       '<details class="add-form-panel"><summary>+ Add New Work Code</summary><div>' +
       '<form id="add-code-form" onsubmit="submitWorkCode(event)">' +
         '<div class="form-row">' +
-          '<label>Code ID <input type="text" id="wc-id" required placeholder="e.g. DEV, DESIGN, PM"></label>' +
+          '<label>Code ID <input type="text" id="wc-id" required placeholder="e.g. Dev, Design, PM"></label>' +
           '<label>Description <input type="text" id="wc-desc" required placeholder="e.g. Software Development"></label>' +
+        '</div>' +
+        '<div class="form-row">' +
           '<label>Category <select id="wc-cat"><option value="billable">Billable</option><option value="non-billable">Non-billable</option></select></label>' +
+          '<label>Contract ' + buildSelect('wc-contract', contractOpts, 'id', 'label', { placeholder: 'None' }) + '</label>' +
         '</div>' +
         '<div class="form-actions"><button type="submit">Add Code</button></div>' +
-      '</form></div></details>';
+      '</form></div></details>' +
+      '<div id="code-edit-area"></div>';
 
     if (codes.length > 0) {
-      html += '<table><thead><tr><th>Code ID</th><th>Description</th><th>Category</th><th>Active</th></tr></thead><tbody>';
+      var conMap = {};
+      contracts.forEach(function(c) { conMap[normalizeId(c.contract_id)] = c.name; });
+
+      html += '<table><thead><tr><th>Code ID</th><th>Description</th><th>Category</th><th>Contract</th><th></th></tr></thead><tbody>';
       codes.forEach(function(c) {
         var isActive = c.active === true || c.active === 'TRUE' || c.active === 'true';
+        var conName = c.contract_id ? (conMap[normalizeId(c.contract_id)] || '') : '';
         html += '<tr style="' + (isActive ? '' : 'opacity:0.5;') + '">' +
           '<td><strong>' + escapeHtml(c.code_id) + '</strong></td>' +
           '<td>' + escapeHtml(c.description) + '</td>' +
           '<td>' + escapeHtml(c.category) + '</td>' +
-          '<td>' +
+          '<td>' + (conName ? escapeHtml(conName) : '<span class="muted">—</span>') + '</td>' +
+          '<td class="actions">' +
+            '<button type="button" class="btn-small btn-subtle" onclick="editWorkCode(\'' + escapeHtml(c.code_id) + '\')">Edit</button> ' +
             (isActive
-              ? '<button type="button" class="outline secondary" onclick="toggleCode(' + c._rowIndex + ', false)">Deactivate</button>'
-              : '<button type="button" class="outline" onclick="toggleCode(' + c._rowIndex + ', true)">Activate</button>') +
+              ? '<button type="button" class="btn-small btn-subtle" onclick="toggleCode(' + c._rowIndex + ', false)">Deactivate</button>'
+              : '<button type="button" class="btn-small" onclick="toggleCode(' + c._rowIndex + ', true)">Activate</button>') +
           '</td></tr>';
       });
       html += '</tbody></table>';
@@ -222,12 +299,69 @@ function renderCodeSettings() {
   });
 }
 
+function editWorkCode(codeId) {
+  Promise.all([
+    serverCall('getAllClient', 'WorkCodes'),
+    serverCall('getAllClient', 'Contracts')
+  ]).then(function(results) {
+    var codes = results[0] || [];
+    var contracts = results[1] || [];
+    var c = codes.find(function(x) { return x.code_id === codeId; });
+    if (!c) { showToast('Code not found', 'error'); return; }
+
+    var catOpts = ['billable', 'non-billable'].map(function(v) {
+      return '<option value="' + v + '"' + (v === c.category ? ' selected' : '') + '>' + v + '</option>';
+    }).join('');
+
+    var conOpts = '<option value="">None</option>' + contracts.map(function(con) {
+      var sel = idsMatch(con.contract_id, c.contract_id || '') ? ' selected' : '';
+      return '<option value="' + escapeHtml(con.contract_id) + '"' + sel + '>' + escapeHtml(con.name) + '</option>';
+    }).join('');
+
+    var area = document.getElementById('code-edit-area');
+    area.innerHTML =
+      '<article style="margin:1rem 0;">' +
+        '<header><h4>Edit: ' + escapeHtml(c.code_id) + '</h4></header>' +
+        '<form onsubmit="saveWorkCode(event, \'' + escapeHtml(c.code_id) + '\')">' +
+          '<div class="form-row">' +
+            '<label>Description <input type="text" id="ewc-desc" required value="' + escapeHtml(c.description) + '"></label>' +
+            '<label>Category <select id="ewc-cat">' + catOpts + '</select></label>' +
+            '<label>Contract <select id="ewc-contract">' + conOpts + '</select></label>' +
+          '</div>' +
+          '<div class="form-actions">' +
+            '<button type="submit">Save</button>' +
+            '<button type="button" class="btn-subtle" onclick="document.getElementById(\'code-edit-area\').innerHTML=\'\'">Cancel</button>' +
+          '</div>' +
+        '</form>' +
+      '</article>';
+    area.scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
+function saveWorkCode(event, codeId) {
+  event.preventDefault();
+  var data = {
+    code_id: codeId,
+    description: document.getElementById('ewc-desc').value,
+    category: document.getElementById('ewc-cat').value,
+    contract_id: document.getElementById('ewc-contract').value
+  };
+
+  serverCall('updateWorkCode', data).then(function() {
+    showToast('Work code updated!');
+    document.getElementById('code-edit-area').innerHTML = '';
+    refreshReferenceData();
+    renderCodeSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
 function submitWorkCode(event) {
   event.preventDefault();
   var data = {
-    code_id: document.getElementById('wc-id').value.toUpperCase(),
+    code_id: document.getElementById('wc-id').value.trim(),
     description: document.getElementById('wc-desc').value,
-    category: document.getElementById('wc-cat').value
+    category: document.getElementById('wc-cat').value,
+    contract_id: document.getElementById('wc-contract').value
   };
 
   serverCall('addWorkCode', data).then(function() {
@@ -543,7 +677,8 @@ function renderContractSettings() {
   content.innerHTML = '<div aria-busy="true">Loading...</div>';
 
   var businesses = AppCache.businesses || [];
-  var codes = AppCache.workCodes || [];
+  var currencyOptions = '<option value="NZD">NZD</option><option value="USD">USD</option>' +
+    '<option value="AUD">AUD</option><option value="GBP">GBP</option><option value="EUR">EUR</option>';
 
   serverCall('getAllClient', 'Contracts').then(function(contracts) {
     var html =
@@ -556,26 +691,22 @@ function renderContractSettings() {
         '<div class="form-row">' +
           '<label>PO Number <input type="text" id="con-po" placeholder="e.g. PO-12345"></label>' +
           '<label>Value <input type="number" id="con-value" step="0.01" required placeholder="Total contract value"></label>' +
-          '<label>Currency <select id="con-currency">' +
-            '<option value="NZD">NZD</option><option value="USD">USD</option>' +
-            '<option value="AUD">AUD</option><option value="GBP">GBP</option>' +
-            '<option value="EUR">EUR</option></select></label>' +
+          '<label>Currency <select id="con-currency">' + currencyOptions + '</select></label>' +
         '</div>' +
         '<div class="form-row">' +
           '<label>Start Date <input type="date" id="con-from" required></label>' +
           '<label>End Date <input type="date" id="con-to" required></label>' +
         '</div>' +
-        '<div class="form-row">' +
-          '<label>Work Codes (comma-separated, or leave blank for all) <input type="text" id="con-codes" placeholder="e.g. DEV, PM, DESIGN"></label>' +
-        '</div>' +
         '<label>Notes <textarea id="con-notes" rows="2"></textarea></label>' +
+        '<p class="muted small">Assign work codes to this contract under the Work Codes tab.</p>' +
         '<div class="form-actions"><button type="submit">Add Contract</button></div>' +
-      '</form></div></details>';
+      '</form></div></details>' +
+      '<div id="con-edit-area"></div>';
 
     if (contracts.length > 0) {
       html += '<div class="scroll-x"><table class="data-table"><thead><tr>' +
         '<th>Business</th><th>Name</th><th>PO #</th><th>Period</th>' +
-        '<th class="number">Value</th><th>Codes</th><th>Status</th><th>Actions</th>' +
+        '<th class="number">Value</th><th>Status</th><th></th>' +
         '</tr></thead><tbody>';
 
       var bizMap = {};
@@ -589,9 +720,9 @@ function renderContractSettings() {
           '<td>' + escapeHtml(c.po_number) + '</td>' +
           '<td>' + formatDate(c.date_from) + ' &rarr; ' + formatDate(c.date_to) + '</td>' +
           '<td class="number">' + formatCurrency(c.value, c.currency || 'NZD') + '</td>' +
-          '<td>' + escapeHtml(c.work_codes) + '</td>' +
           '<td><span class="badge badge-' + (isActive ? 'paid' : 'void') + '">' + escapeHtml(c.status) + '</span></td>' +
           '<td class="actions">' +
+            '<button type="button" class="btn-small btn-subtle" onclick="editContract(\'' + escapeHtml(c.contract_id) + '\')">Edit</button> ' +
             (isActive
               ? '<button type="button" class="btn-small btn-subtle" onclick="completeContract(\'' + c.contract_id + '\')">Complete</button>'
               : '') +
@@ -608,6 +739,74 @@ function renderContractSettings() {
   });
 }
 
+function editContract(contractId) {
+  var businesses = AppCache.businesses || [];
+  serverCall('getAllClient', 'Contracts').then(function(contracts) {
+    var c = contracts.find(function(x) { return idsMatch(x.contract_id, contractId); });
+    if (!c) { showToast('Contract not found', 'error'); return; }
+
+    var bizOpts = businesses.map(function(b) {
+      return '<option value="' + escapeHtml(b.business_id) + '"' +
+        (idsMatch(b.business_id, c.business_id) ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
+    }).join('');
+
+    var currencies = ['NZD','USD','AUD','GBP','EUR'];
+    var cur = c.currency || 'NZD';
+    var curOpts = currencies.map(function(v) {
+      return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + v + '</option>';
+    }).join('');
+
+    var area = document.getElementById('con-edit-area');
+    area.innerHTML =
+      '<article style="margin:1rem 0;">' +
+        '<header><h4>Edit: ' + escapeHtml(c.name) + '</h4></header>' +
+        '<form onsubmit="saveContract(event, \'' + escapeHtml(c.contract_id) + '\')">' +
+          '<div class="form-row">' +
+            '<label>Business <select id="econ-biz">' + bizOpts + '</select></label>' +
+            '<label>Name <input type="text" id="econ-name" required value="' + escapeHtml(c.name) + '"></label>' +
+          '</div>' +
+          '<div class="form-row">' +
+            '<label>PO Number <input type="text" id="econ-po" value="' + escapeHtml(c.po_number || '') + '"></label>' +
+            '<label>Value <input type="number" id="econ-value" step="0.01" required value="' + (c.value || '') + '"></label>' +
+            '<label>Currency <select id="econ-currency">' + curOpts + '</select></label>' +
+          '</div>' +
+          '<div class="form-row">' +
+            '<label>Start Date <input type="date" id="econ-from" required value="' + (c.date_from ? String(c.date_from).slice(0, 10) : '') + '"></label>' +
+            '<label>End Date <input type="date" id="econ-to" required value="' + (c.date_to ? String(c.date_to).slice(0, 10) : '') + '"></label>' +
+          '</div>' +
+          '<label>Notes <textarea id="econ-notes" rows="2">' + escapeHtml(c.notes || '') + '</textarea></label>' +
+          '<div class="form-actions">' +
+            '<button type="submit">Save</button>' +
+            '<button type="button" class="btn-subtle" onclick="document.getElementById(\'con-edit-area\').innerHTML=\'\'">Cancel</button>' +
+          '</div>' +
+        '</form>' +
+      '</article>';
+    area.scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
+function saveContract(event, contractId) {
+  event.preventDefault();
+  var data = {
+    contract_id: contractId,
+    business_id: document.getElementById('econ-biz').value,
+    name: document.getElementById('econ-name').value,
+    po_number: document.getElementById('econ-po').value,
+    value: document.getElementById('econ-value').value,
+    currency: document.getElementById('econ-currency').value,
+    date_from: document.getElementById('econ-from').value,
+    date_to: document.getElementById('econ-to').value,
+    notes: document.getElementById('econ-notes').value
+  };
+
+  serverCall('updateContract', data).then(function() {
+    showToast('Contract updated!');
+    document.getElementById('con-edit-area').innerHTML = '';
+    refreshReferenceData();
+    renderContractSettings();
+  }).catch(function(err) { showToast(err.message, 'error'); });
+}
+
 function submitContract(event) {
   event.preventDefault();
   var data = {
@@ -618,7 +817,6 @@ function submitContract(event) {
     currency: document.getElementById('con-currency').value,
     date_from: document.getElementById('con-from').value,
     date_to: document.getElementById('con-to').value,
-    work_codes: document.getElementById('con-codes').value,
     notes: document.getElementById('con-notes').value
   };
 

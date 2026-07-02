@@ -60,10 +60,10 @@ function generateInvoice(params) {
 
   var subtotal = timeSubtotal + expenseSubtotal;
 
-  // GST: optional, configurable rate
-  var includeGst = params.includeGst === true || params.includeGst === 'true';
-  var gstRate = includeGst ? (Number(params.gstRate) || 0.15) : 0;
-  var gstAmount = includeGst ? Math.round(subtotal * gstRate * 100) / 100 : 0;
+  // GST applies to time entries (services) only, not expenses
+  var includeGst = isTruthy(params.includeGst);
+  var gstRate = includeGst ? (params.gstRate != null ? Number(params.gstRate) : 0.15) : 0;
+  var gstAmount = includeGst ? Math.round(timeSubtotal * gstRate * 100) / 100 : 0;
   var total = subtotal + gstAmount;
 
   // Generate MMYY invoice ID based on the period end date
@@ -77,6 +77,7 @@ function generateInvoice(params) {
     created_date: params.dateTo,
     include_gst: includeGst,
     gst_rate: gstRate,
+    time_subtotal: timeSubtotal,
     subtotal: subtotal,
     gst_amount: gstAmount,
     total: total,
@@ -275,7 +276,7 @@ function updateInvoice(params) {
 
   var recalc = false;
   if (params.include_gst !== undefined) {
-    invoice.include_gst = (params.include_gst === true || params.include_gst === 'true');
+    invoice.include_gst = isTruthy(params.include_gst);
     recalc = true;
   }
   if (params.gst_rate !== undefined && params.gst_rate !== '') {
@@ -284,10 +285,12 @@ function updateInvoice(params) {
   }
 
   if (recalc) {
+    var gstBase = (invoice.time_subtotal != null && invoice.time_subtotal !== '')
+      ? Number(invoice.time_subtotal) : (Number(invoice.subtotal) || 0);
     var subtotal = Number(invoice.subtotal) || 0;
-    var includeGst = invoice.include_gst === true || invoice.include_gst === 'true' || invoice.include_gst === 'TRUE';
+    var includeGst = isTruthy(invoice.include_gst);
     var rate = includeGst ? (Number(invoice.gst_rate) || 0) : 0;
-    var gstAmount = includeGst ? Math.round(subtotal * rate * 100) / 100 : 0;
+    var gstAmount = includeGst ? Math.round(gstBase * rate * 100) / 100 : 0;
     var newTotal = subtotal + gstAmount;
 
     // If the total is changing and the invoice is already allocated,

@@ -2,27 +2,31 @@
  * Budget allocation service.
  * Applies budget rules to invoices and tracks money flow.
  *
- * Three-tier allocation model:
+ * Three-tier allocation model (applied to invoice subtotal, excl GST):
  *   Tier 1 — Withheld (Tax/ACC Withheld): % of Gross → deducted to give Adjusted
  *   Tier 2 — Obligations (Tax/ACC To Pay): % of Adjusted → deducted to give Net
  *   Tier 3 — Distribution (Donate/Save/Invest/Spend): % of Net → must sum to 100%
+ *
+ * GST Collected is tracked separately from the invoice's gst_amount field.
  *
  * Status model: 'allocated' -> 'paid'
  */
 
 var BUDGET_CATEGORIES = [
   'Tax Withheld', 'Tax To Pay', 'ACC Withheld', 'ACC To Pay',
+  'GST Collected',
   'Donate', 'Save', 'Invest', 'Spend'
 ];
 
 var BUDGET_PCT_FIELDS = [
   'tax_withheld_pct', 'tax_to_pay_pct',
   'acc_withheld_pct', 'acc_to_pay_pct',
+  null,
   'donate_pct', 'save_pct', 'invest_pct', 'spend_pct'
 ];
 
 var WITHHELD_CATEGORIES = ['Tax Withheld', 'ACC Withheld'];
-var OBLIGATION_CATEGORIES = ['Tax To Pay', 'ACC To Pay'];
+var OBLIGATION_CATEGORIES = ['Tax To Pay', 'ACC To Pay', 'GST Collected'];
 var DISTRIBUTION_CATEGORIES = ['Donate', 'Save', 'Invest', 'Spend'];
 
 function computeAllocationAmounts(rule, gross) {
@@ -77,12 +81,28 @@ function allocateBudget(invoiceId, ruleId) {
     var rule = findById('BudgetRules', ruleId);
     if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
-    var total = Number(invoice.total) || 0;
+    var gross = (invoice.time_subtotal != null && invoice.time_subtotal !== '')
+      ? Number(invoice.time_subtotal) : (Number(invoice.subtotal) || 0);
+    var gstAmount = isTruthy(invoice.include_gst) ? (Number(invoice.gst_amount) || 0) : 0;
     var today = todayLocal();
-    var calc = computeAllocationAmounts(rule, total);
+    var calc = computeAllocationAmounts(rule, gross);
 
     var allocations = [];
     BUDGET_CATEGORIES.forEach(function(cat, i) {
+      if (cat === 'GST Collected') {
+        if (gstAmount > 0) {
+          allocations.push(appendRow('BudgetAllocations', {
+            invoice_id: invoiceId,
+            category: 'GST Collected',
+            percentage: 0,
+            amount: gstAmount,
+            status: 'allocated',
+            transfer_date: '',
+            notes: ''
+          }));
+        }
+        return;
+      }
       var pct = Number(rule[BUDGET_PCT_FIELDS[i]]) || 0;
       var isWithheld = WITHHELD_CATEGORIES.indexOf(cat) !== -1;
 
@@ -212,6 +232,9 @@ function getBudgetSummary(params) {
     accToPayAllocated: byCat['ACC To Pay'].allocated,
     accToPayPaid: byCat['ACC To Pay'].paid,
     accToPayOutstanding: byCat['ACC To Pay'].outstanding,
+    gstAllocated: byCat['GST Collected'].allocated,
+    gstPaid: byCat['GST Collected'].paid,
+    gstOutstanding: byCat['GST Collected'].outstanding,
     spendAllocated: byCat['Spend'].allocated, spendPaid: byCat['Spend'].paid, spendOutstanding: byCat['Spend'].outstanding,
     saveAllocated: byCat['Save'].allocated, savePaid: byCat['Save'].paid, saveOutstanding: byCat['Save'].outstanding,
     donateAllocated: byCat['Donate'].allocated, donatePaid: byCat['Donate'].paid, donateOutstanding: byCat['Donate'].outstanding,

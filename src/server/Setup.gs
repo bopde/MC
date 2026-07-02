@@ -25,7 +25,7 @@ function setupSheets() {
       'default_rate', 'currency', 'active'
     ],
     'WorkCodes': [
-      'code_id', 'description', 'category', 'active'
+      'code_id', 'description', 'category', 'contract_id', 'active'
     ],
     'Accounts': [
       'account_id', 'name', 'type', 'currency', 'purpose', 'active'
@@ -56,7 +56,7 @@ function setupSheets() {
     ],
     'Invoices': [
       'invoice_id', 'business_id', 'date_from', 'date_to', 'created_date',
-      'include_gst', 'gst_rate', 'subtotal', 'gst_amount', 'total',
+      'include_gst', 'gst_rate', 'time_subtotal', 'subtotal', 'gst_amount', 'total',
       'status', 'budget_rule_id', 'contract_id', 'po_number',
       'description', 'notes', 'line_descriptions'
     ],
