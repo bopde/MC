@@ -39,6 +39,21 @@ function addBusiness(data) {
   return appendRow('Businesses', data);
 }
 
+function updateBusiness(data) {
+  var biz = findById('Businesses', data.business_id);
+  if (!biz) throw new Error('Business not found: ' + data.business_id);
+
+  if (data.name !== undefined) biz.name = data.name;
+  if (data.contact_name !== undefined) biz.contact_name = data.contact_name;
+  if (data.email !== undefined) biz.email = data.email;
+  if (data.default_rate !== undefined) biz.default_rate = Number(data.default_rate) || 0;
+  if (data.currency !== undefined) biz.currency = data.currency;
+  if (data.address !== undefined) biz.address = data.address;
+
+  updateRow('Businesses', biz._rowIndex, biz);
+  return biz;
+}
+
 function getAllBusinesses() {
   return getAll('Businesses');
 }
@@ -52,6 +67,18 @@ function addWorkCode(data) {
   data.active = true;
   if (!data.category) data.category = 'billable';
   return appendRow('WorkCodes', data);
+}
+
+function updateWorkCode(data) {
+  var code = findById('WorkCodes', data.code_id);
+  if (!code) throw new Error('Work code not found: ' + data.code_id);
+
+  if (data.description !== undefined) code.description = data.description;
+  if (data.category !== undefined) code.category = data.category;
+  if (data.contract_id !== undefined) code.contract_id = data.contract_id;
+
+  updateRow('WorkCodes', code._rowIndex, code);
+  return code;
 }
 
 // --- Accounts ---

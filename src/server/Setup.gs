@@ -25,7 +25,7 @@ function setupSheets() {
       'default_rate', 'currency', 'active'
     ],
     'WorkCodes': [
-      'code_id', 'description', 'category', 'active'
+      'code_id', 'description', 'category', 'contract_id', 'active'
     ],
     'Accounts': [
       'account_id', 'name', 'type', 'currency', 'purpose', 'active'

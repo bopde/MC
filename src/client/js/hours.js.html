@@ -123,13 +123,12 @@ function filterContractsByBusiness(bizId) {
   contractEl.parentNode.replaceChild(newEl, contractEl);
 
   newEl.addEventListener('change', function() {
-    var selected = contracts.find(function(c) { return idsMatch(c.contract_id, newEl.value); });
     var codeEl = document.getElementById('te-code');
     if (!codeEl) return;
-    if (selected && selected.work_codes) {
-      var allowedCodes = String(selected.work_codes).split(',').map(function(s) { return s.trim(); });
+    var contractId = newEl.value;
+    if (contractId) {
       var allCodes = AppCache.workCodes || [];
-      var filtered = allCodes.filter(function(c) { return allowedCodes.indexOf(c.code_id) !== -1; });
+      var filtered = allCodes.filter(function(c) { return idsMatch(c.contract_id, contractId); });
       if (filtered.length > 0) {
         codeEl.innerHTML = buildCodeSelectOptions(filtered);
         return;
@@ -172,8 +171,9 @@ function filterTimeEntries() {
     renderTimeEntriesTable(_loadedTimeEntries);
     updateTimeAutofill(_loadedTimeEntries);
   }).catch(function(err) {
-    document.getElementById('time-entries-list').innerHTML =
-      '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+    var tel = document.getElementById('time-entries-list');
+    tel.removeAttribute('aria-busy');
+    tel.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
@@ -206,6 +206,7 @@ function updateTimeAutofill(entries) {
 
 function renderTimeEntriesTable(entries) {
   var el = document.getElementById('time-entries-list');
+  el.removeAttribute('aria-busy');
   if (!entries || entries.length === 0) {
     el.innerHTML = '<p class="muted">No time entries found.</p>';
     return;
@@ -406,13 +407,15 @@ function loadExpenses() {
     _loadedExpenses = expenses || [];
     renderExpensesTable(_loadedExpenses);
   }).catch(function(err) {
-    document.getElementById('expenses-list').innerHTML =
-      '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+    var eel = document.getElementById('expenses-list');
+    eel.removeAttribute('aria-busy');
+    eel.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
   });
 }
 
 function renderExpensesTable(expenses) {
   var el = document.getElementById('expenses-list');
+  el.removeAttribute('aria-busy');
   if (!expenses || expenses.length === 0) {
     el.innerHTML = '<p class="muted">No expenses found.</p>';
     return;
