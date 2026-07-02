@@ -81,7 +81,8 @@ function allocateBudget(invoiceId, ruleId) {
     var rule = findById('BudgetRules', ruleId);
     if (!rule) throw new Error('Budget rule not found: ' + ruleId);
 
-    var gross = invoice.time_subtotal != null ? Number(invoice.time_subtotal) : (Number(invoice.subtotal) || 0);
+    var gross = (invoice.time_subtotal != null && invoice.time_subtotal !== '')
+      ? Number(invoice.time_subtotal) : (Number(invoice.subtotal) || 0);
     var gstAmount = isTruthy(invoice.include_gst) ? (Number(invoice.gst_amount) || 0) : 0;
     var today = todayLocal();
     var calc = computeAllocationAmounts(rule, gross);

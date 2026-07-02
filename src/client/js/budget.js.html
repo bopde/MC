@@ -353,7 +353,8 @@ function previewAllocation() {
 
   serverCall('getInvoiceDetails', invoiceId).then(function(data) {
     var inv = data.invoice;
-    var gross = inv.time_subtotal != null ? Number(inv.time_subtotal) : (Number(inv.subtotal) || 0);
+    var gross = (inv.time_subtotal != null && inv.time_subtotal !== '')
+      ? Number(inv.time_subtotal) : (Number(inv.subtotal) || 0);
     var gstAmount = (inv.include_gst === true || inv.include_gst === 'true' || inv.include_gst === 'TRUE')
       ? (Number(inv.gst_amount) || 0) : 0;
     var currency = (data.business && data.business.currency) || 'NZD';

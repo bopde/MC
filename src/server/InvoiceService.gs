@@ -285,7 +285,8 @@ function updateInvoice(params) {
   }
 
   if (recalc) {
-    var gstBase = invoice.time_subtotal != null ? Number(invoice.time_subtotal) : (Number(invoice.subtotal) || 0);
+    var gstBase = (invoice.time_subtotal != null && invoice.time_subtotal !== '')
+      ? Number(invoice.time_subtotal) : (Number(invoice.subtotal) || 0);
     var subtotal = Number(invoice.subtotal) || 0;
     var includeGst = isTruthy(invoice.include_gst);
     var rate = includeGst ? (Number(invoice.gst_rate) || 0) : 0;
